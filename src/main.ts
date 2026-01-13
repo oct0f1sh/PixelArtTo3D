@@ -53,7 +53,7 @@ const state: AppState = {
   baseHeight: 1,
   baseColor: '#000000',
   colorMergeEnabled: false,
-  colorMergeThreshold: 10,
+  colorMergeThreshold: 1,
   keyholeEnabled: false,
   keyholePosition: 'top-center',
   exportFormat: '3mf',
