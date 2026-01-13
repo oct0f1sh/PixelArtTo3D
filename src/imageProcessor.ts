@@ -10,20 +10,11 @@ import type {
   PixelGrid,
   QuantizedResult,
   RGBAPixel,
-  ColorBox,
 } from './types';
 
 /** Threshold for considering a pixel transparent (alpha < 128) */
 const TRANSPARENCY_THRESHOLD = 128;
 
-/** Minimum allowed color count for quantization */
-const MIN_COLOR_COUNT = 2;
-
-/** Maximum allowed color count for quantization */
-const MAX_COLOR_COUNT = 16;
-
-/** Default color count for quantization */
-const DEFAULT_COLOR_COUNT = 8;
 
 /**
  * Converts RGB values to a hex string
@@ -188,132 +179,78 @@ function extractOpaquePixels(imageData: ImageData): RGBAPixel[] {
 }
 
 /**
- * Creates a ColorBox from an array of pixels
+ * Extracts unique colors from pixels
  */
-function createColorBox(pixels: RGBAPixel[]): ColorBox {
-  let rMin = 255, rMax = 0;
-  let gMin = 255, gMax = 0;
-  let bMin = 255, bMax = 0;
+function extractUniqueColors(pixels: RGBAPixel[]): Color[] {
+  const colorMap = new Map<string, { r: number; g: number; b: number; count: number }>();
 
   for (const pixel of pixels) {
-    rMin = Math.min(rMin, pixel.r);
-    rMax = Math.max(rMax, pixel.r);
-    gMin = Math.min(gMin, pixel.g);
-    gMax = Math.max(gMax, pixel.g);
-    bMin = Math.min(bMin, pixel.b);
-    bMax = Math.max(bMax, pixel.b);
+    const key = `${pixel.r},${pixel.g},${pixel.b}`;
+    const existing = colorMap.get(key);
+    if (existing) {
+      existing.count++;
+    } else {
+      colorMap.set(key, { r: pixel.r, g: pixel.g, b: pixel.b, count: 1 });
+    }
   }
 
-  return { pixels, rMin, rMax, gMin, gMax, bMin, bMax };
+  // Convert to Color array, sorted by frequency (most common first)
+  return Array.from(colorMap.values())
+    .sort((a, b) => b.count - a.count)
+    .map(c => createColor(c.r, c.g, c.b));
 }
 
 /**
- * Finds the channel with the largest range in a ColorBox
+ * Calculates the Euclidean distance between two colors
  */
-function getLargestChannel(box: ColorBox): 'r' | 'g' | 'b' {
-  const rRange = box.rMax - box.rMin;
-  const gRange = box.gMax - box.gMin;
-  const bRange = box.bMax - box.bMin;
-
-  if (rRange >= gRange && rRange >= bRange) {
-    return 'r';
-  } else if (gRange >= bRange) {
-    return 'g';
-  }
-  return 'b';
+function colorDistance(c1: Color, c2: Color): number {
+  const dr = c1.r - c2.r;
+  const dg = c1.g - c2.g;
+  const db = c1.b - c2.b;
+  return Math.sqrt(dr * dr + dg * dg + db * db);
 }
 
 /**
- * Splits a ColorBox at the median of its largest channel
- */
-function splitBox(box: ColorBox): [ColorBox, ColorBox] {
-  const channel = getLargestChannel(box);
-
-  // Sort pixels by the largest channel
-  const sortedPixels = [...box.pixels].sort((a, b) => a[channel] - b[channel]);
-
-  // Split at median
-  const medianIndex = Math.floor(sortedPixels.length / 2);
-  const lowerPixels = sortedPixels.slice(0, medianIndex);
-  const upperPixels = sortedPixels.slice(medianIndex);
-
-  return [createColorBox(lowerPixels), createColorBox(upperPixels)];
-}
-
-/**
- * Calculates the volume of a ColorBox (product of channel ranges)
- */
-function getBoxVolume(box: ColorBox): number {
-  return (
-    (box.rMax - box.rMin + 1) *
-    (box.gMax - box.gMin + 1) *
-    (box.bMax - box.bMin + 1)
-  );
-}
-
-/**
- * Performs median-cut color quantization
+ * Merges similar colors based on a similarity threshold.
+ * Colors within the threshold distance are merged into a single color.
  *
- * @param pixels - Array of opaque pixels to quantize
- * @param colorCount - Target number of colors (2-16)
- * @returns Array of Color objects representing the palette
+ * @param colors - Array of unique colors
+ * @param threshold - Similarity threshold (0-100). Higher = more aggressive merging.
+ *                    0 = no merging, 100 = very aggressive merging
+ * @returns Array of merged colors
  */
-function medianCut(pixels: RGBAPixel[], colorCount: number): Color[] {
-  if (pixels.length === 0) {
-    return [];
-  }
+function mergeSimilarColors(colors: Color[], threshold: number): Color[] {
+  if (colors.length === 0) return [];
+  if (threshold === 0) return colors;
 
-  // Clamp color count to valid range
-  const targetColors = Math.max(MIN_COLOR_COUNT, Math.min(MAX_COLOR_COUNT, colorCount));
+  // Convert threshold (0-100) to a color distance (0-441, max RGB distance)
+  const maxDistance = Math.sqrt(255 * 255 * 3); // ~441
+  const distanceThreshold = (threshold / 100) * maxDistance;
 
-  // Start with one box containing all pixels
-  const boxes: ColorBox[] = [createColorBox(pixels)];
+  const merged: Color[] = [];
+  const used = new Set<number>();
 
-  // Split boxes until we have the target number of colors
-  while (boxes.length < targetColors) {
-    // Find the box with the largest volume that can be split
-    let maxVolume = -1;
-    let maxIndex = -1;
+  for (let i = 0; i < colors.length; i++) {
+    if (used.has(i)) continue;
 
-    for (let i = 0; i < boxes.length; i++) {
-      if (boxes[i].pixels.length >= 2) {
-        const volume = getBoxVolume(boxes[i]);
-        if (volume > maxVolume) {
-          maxVolume = volume;
-          maxIndex = i;
-        }
+    const baseColor = colors[i];
+    used.add(i);
+
+    // Find all similar colors
+    for (let j = i + 1; j < colors.length; j++) {
+      if (used.has(j)) continue;
+
+      const distance = colorDistance(baseColor, colors[j]);
+      if (distance <= distanceThreshold) {
+        used.add(j);
       }
     }
 
-    // If no box can be split, we're done
-    if (maxIndex === -1) {
-      break;
-    }
-
-    // Split the largest box
-    const boxToSplit = boxes.splice(maxIndex, 1)[0];
-    const [box1, box2] = splitBox(boxToSplit);
-
-    // Only add boxes that have pixels
-    if (box1.pixels.length > 0) {
-      boxes.push(box1);
-    }
-    if (box2.pixels.length > 0) {
-      boxes.push(box2);
-    }
+    // Use the most common color (first one) as the representative
+    merged.push(baseColor);
   }
 
-  // Calculate average color for each box
-  return boxes.map((box) => {
-    let rSum = 0, gSum = 0, bSum = 0;
-    for (const pixel of box.pixels) {
-      rSum += pixel.r;
-      gSum += pixel.g;
-      bSum += pixel.b;
-    }
-    const count = box.pixels.length;
-    return createColor(rSum / count, gSum / count, bSum / count);
-  });
+  return merged;
 }
 
 /**
@@ -349,26 +286,29 @@ function findNearestColorIndex(r: number, g: number, b: number, palette: Color[]
 }
 
 /**
- * Quantizes the colors in an ImageData to a reduced palette using median-cut algorithm
+ * Extracts all unique colors from an ImageData, optionally merging similar colors.
  *
- * @param imageData - The source ImageData to quantize
- * @param colorCount - Target number of colors (default: 8, range: 2-16)
+ * @param imageData - The source ImageData to process
+ * @param similarityThreshold - Optional threshold (0-100) for merging similar colors.
+ *                              0 = no merging (default), higher = more aggressive merging
  * @returns QuantizedResult containing the palette and pixel grid
  */
 export function quantizeColors(
   imageData: ImageData,
-  colorCount: number = DEFAULT_COLOR_COUNT
+  similarityThreshold: number = 0
 ): QuantizedResult {
   const { data, width, height } = imageData;
 
-  // Clamp color count to valid range
-  const targetColors = Math.max(MIN_COLOR_COUNT, Math.min(MAX_COLOR_COUNT, colorCount));
-
-  // Extract non-transparent pixels for quantization
+  // Extract non-transparent pixels
   const opaquePixels = extractOpaquePixels(imageData);
 
-  // Generate palette using median-cut
-  const palette = medianCut(opaquePixels, targetColors);
+  // Extract all unique colors sorted by frequency
+  const uniqueColors = extractUniqueColors(opaquePixels);
+
+  // Optionally merge similar colors
+  const palette = similarityThreshold > 0
+    ? mergeSimilarColors(uniqueColors, similarityThreshold)
+    : uniqueColors;
 
   // Create pixel grid with color indices
   const pixels: PixelGrid = [];
@@ -386,7 +326,7 @@ export function quantizeColors(
         // Edge case: no opaque pixels means empty palette
         row.push(-1);
       } else {
-        // Find nearest color in palette
+        // Find exact color in palette
         const r = data[index];
         const g = data[index + 1];
         const b = data[index + 2];

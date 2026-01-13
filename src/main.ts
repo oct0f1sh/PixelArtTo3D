@@ -5,9 +5,9 @@
 
 import './style.css';
 import * as THREE from 'three';
-import { loadImage, resizeImage, quantizeColors } from './imageProcessor';
+import { loadImage, quantizeColors } from './imageProcessor';
 import { initPreview, type PreviewController } from './preview';
-import { generateMeshes, createColoredMesh, type MeshResult } from './meshGenerator';
+import { generateMeshes, rotateForPrinting, type MeshResult } from './meshGenerator';
 import { exportSTL, export3MF } from './exporter';
 import type { QuantizedResult } from './types';
 
@@ -18,19 +18,20 @@ import type { QuantizedResult } from './types';
 interface AppState {
   originalFile: File | null;
   originalImageData: ImageData | null;
-  processedImageData: ImageData | null;
   quantizedResult: QuantizedResult | null;
   meshResult: MeshResult | null;
   previewController: PreviewController | null;
 
   // Settings
-  maxDimension: number;
-  colorCount: number;
   unit: 'mm' | 'inches';
   setDimension: 'width' | 'height';
   dimensionValue: number;
   pixelHeight: number;
+  baseEnabled: boolean;
   baseHeight: number;
+  baseColor: string;
+  colorMergeEnabled: boolean;
+  colorMergeThreshold: number;
   keyholeEnabled: boolean;
   keyholePosition: 'top-left' | 'top-center' | 'top-right';
   exportFormat: 'stl' | '3mf';
@@ -40,21 +41,22 @@ interface AppState {
 const state: AppState = {
   originalFile: null,
   originalImageData: null,
-  processedImageData: null,
   quantizedResult: null,
   meshResult: null,
   previewController: null,
 
-  maxDimension: 32,
-  colorCount: 8,
   unit: 'mm',
   setDimension: 'width',
   dimensionValue: 50,
   pixelHeight: 2,
+  baseEnabled: true,
   baseHeight: 1,
+  baseColor: '#000000',
+  colorMergeEnabled: false,
+  colorMergeThreshold: 10,
   keyholeEnabled: false,
   keyholePosition: 'top-center',
-  exportFormat: 'stl',
+  exportFormat: '3mf',
   filename: 'pixel_art_keychain',
 };
 
@@ -75,11 +77,6 @@ const elements = {
   imageFilename: document.getElementById('image-filename') as HTMLSpanElement,
   clearImageBtn: document.getElementById('clear-image-btn') as HTMLButtonElement,
 
-  // Resize settings
-  resizeInput: document.getElementById('resize-input') as HTMLInputElement,
-  colorCountSlider: document.getElementById('color-count-slider') as HTMLInputElement,
-  colorCountValue: document.getElementById('color-count-value') as HTMLSpanElement,
-
   // Physical dimensions
   unitToggle: document.getElementById('unit-toggle') as HTMLDivElement,
   dimensionToggle: document.getElementById('dimension-toggle') as HTMLDivElement,
@@ -92,8 +89,12 @@ const elements = {
   // Height settings
   pixelHeightSlider: document.getElementById('pixel-height-slider') as HTMLInputElement,
   pixelHeightValue: document.getElementById('pixel-height-value') as HTMLSpanElement,
+  baseToggle: document.getElementById('base-toggle') as HTMLInputElement,
+  baseOptions: document.getElementById('base-options') as HTMLDivElement,
   baseHeightSlider: document.getElementById('base-height-slider') as HTMLInputElement,
   baseHeightValue: document.getElementById('base-height-value') as HTMLSpanElement,
+  baseColorInput: document.getElementById('base-color-input') as HTMLInputElement,
+  baseColorValue: document.getElementById('base-color-value') as HTMLSpanElement,
 
   // Keyhole settings
   keyholeToggle: document.getElementById('keyhole-toggle') as HTMLInputElement,
@@ -108,6 +109,10 @@ const elements = {
   // Color palette
   colorPalette: document.getElementById('color-palette') as HTMLDivElement,
   paletteCount: document.getElementById('palette-count') as HTMLSpanElement,
+  colorMergeToggle: document.getElementById('color-merge-toggle') as HTMLInputElement,
+  colorMergeOptions: document.getElementById('color-merge-options') as HTMLDivElement,
+  colorMergeSlider: document.getElementById('color-merge-slider') as HTMLInputElement,
+  colorMergeValue: document.getElementById('color-merge-value') as HTMLSpanElement,
 
   // Export
   formatToggle: document.getElementById('format-toggle') as HTMLDivElement,
@@ -186,11 +191,9 @@ async function handleImageFile(file: File): Promise<void> {
 async function processImage(): Promise<void> {
   if (!state.originalImageData) return;
 
-  // Resize image
-  state.processedImageData = resizeImage(state.originalImageData, state.maxDimension);
-
-  // Quantize colors
-  state.quantizedResult = quantizeColors(state.processedImageData, state.colorCount);
+  // Extract colors from the native resolution image, optionally merging similar colors
+  const threshold = state.colorMergeEnabled ? state.colorMergeThreshold : 0;
+  state.quantizedResult = quantizeColors(state.originalImageData, threshold);
 
   // Update color palette display
   updateColorPalette();
@@ -221,13 +224,24 @@ function updateColorPalette(): void {
     return;
   }
 
-  elements.colorPalette.innerHTML = palette.map((color, index) => `
+  // Build palette HTML with base color first (if enabled), then extracted colors
+  const baseSwatchHtml = state.baseEnabled ? `
+    <div class="color-swatch">
+      <div class="color-swatch-preview" style="background-color: ${state.baseColor}"></div>
+      <div class="color-swatch-hex">${state.baseColor}</div>
+      <div class="color-swatch-name">base</div>
+    </div>
+  ` : '';
+
+  const colorSwatchesHtml = palette.map((color, index) => `
     <div class="color-swatch">
       <div class="color-swatch-preview" style="background-color: ${color.hex}"></div>
       <div class="color-swatch-hex">${color.hex}</div>
       <div class="color-swatch-name">color_${index + 1}</div>
     </div>
   `).join('');
+
+  elements.colorPalette.innerHTML = baseSwatchHtml + colorSwatchesHtml;
 }
 
 function updateDimensionsDisplay(): void {
@@ -288,13 +302,13 @@ async function generateAndDisplay3D(): Promise<void> {
 
   const pixelSizeMm = totalWidthMm / pixelWidth;
 
-  // Generate meshes
+  // Generate meshes (pass 0 for baseHeight if base is disabled)
   state.meshResult = generateMeshes({
     pixelGrid: pixels,
     palette,
     pixelSize: pixelSizeMm,
     pixelHeight: toMm(state.pixelHeight, state.unit),
-    baseHeight: toMm(state.baseHeight, state.unit),
+    baseHeight: state.baseEnabled ? toMm(state.baseHeight, state.unit) : 0,
     keyhole: {
       enabled: state.keyholeEnabled,
       position: state.keyholePosition,
@@ -316,22 +330,23 @@ async function generateAndDisplay3D(): Promise<void> {
   // Create Three.js meshes from the result
   const meshes: THREE.Mesh[] = [];
 
-  // Add base mesh
-  if (state.meshResult.baseMesh.attributes.position) {
-    const baseMaterial = new THREE.MeshStandardMaterial({
-      color: 0x808080,
-      roughness: 0.8,
-      metalness: 0.1,
+  // Add base mesh with customizable color (only if base is enabled)
+  if (state.baseEnabled && state.meshResult.baseMesh.attributes.position) {
+    const baseMaterial = new THREE.MeshBasicMaterial({
+      color: state.baseColor,
     });
     const baseMesh = new THREE.Mesh(state.meshResult.baseMesh, baseMaterial);
     meshes.push(baseMesh);
   }
 
-  // Add colored meshes
+  // Add colored meshes using MeshBasicMaterial for accurate colors
   for (const [colorIndex, geometry] of state.meshResult.colorMeshes) {
     const color = palette[colorIndex];
     if (color && geometry.attributes.position) {
-      const mesh = createColoredMesh(geometry, color);
+      const material = new THREE.MeshBasicMaterial({
+        color: new THREE.Color(color.r / 255, color.g / 255, color.b / 255),
+      });
+      const mesh = new THREE.Mesh(geometry, material);
       meshes.push(mesh);
     }
   }
@@ -352,29 +367,38 @@ async function handleExport(): Promise<void> {
 
   const filename = `${state.filename}.${state.exportFormat}`;
 
+  // Clone and rotate geometries for export (model should lay flat on build plate)
+  const rotatedGeometries: THREE.BufferGeometry[] = [];
+  const rotatedColorGeometries = new Map<number, THREE.BufferGeometry>();
+
+  // Clone and rotate base mesh (only if base is enabled)
+  let rotatedBaseMesh: THREE.BufferGeometry | null = null;
+  if (state.baseEnabled && state.meshResult.baseMesh.attributes.position) {
+    rotatedBaseMesh = state.meshResult.baseMesh.clone();
+    rotateForPrinting(rotatedBaseMesh);
+    rotatedGeometries.push(rotatedBaseMesh);
+  }
+
+  // Clone and rotate color meshes
+  for (const [colorIndex, geometry] of state.meshResult.colorMeshes) {
+    if (geometry.attributes.position) {
+      const cloned = geometry.clone();
+      rotateForPrinting(cloned);
+      rotatedColorGeometries.set(colorIndex, cloned);
+      rotatedGeometries.push(cloned);
+    }
+  }
+
   try {
     if (state.exportFormat === 'stl') {
-      // Collect all geometries for STL
-      const geometries: THREE.BufferGeometry[] = [];
-
-      if (state.meshResult.baseMesh.attributes.position) {
-        geometries.push(state.meshResult.baseMesh);
-      }
-
-      for (const geometry of state.meshResult.colorMeshes.values()) {
-        if (geometry.attributes.position) {
-          geometries.push(geometry);
-        }
-      }
-
-      exportSTL(geometries, filename);
+      exportSTL(rotatedGeometries, filename);
       showStatus('STL file downloaded successfully!', 'success');
 
     } else {
       // 3MF export
       await export3MF(
-        state.meshResult.colorMeshes,
-        state.meshResult.baseMesh,
+        rotatedColorGeometries,
+        rotatedBaseMesh || new THREE.BufferGeometry(),
         state.quantizedResult.palette,
         filename
       );
@@ -384,6 +408,9 @@ async function handleExport(): Promise<void> {
     console.error('Export failed:', error);
     const message = error instanceof Error ? error.message : 'Unknown error';
     showStatus(`Export failed: ${message}`, 'error');
+  } finally {
+    // Clean up cloned geometries
+    rotatedGeometries.forEach(g => g.dispose());
   }
 }
 
@@ -425,7 +452,6 @@ function setupEventListeners(): void {
   elements.clearImageBtn.addEventListener('click', () => {
     state.originalFile = null;
     state.originalImageData = null;
-    state.processedImageData = null;
     state.quantizedResult = null;
     state.meshResult = null;
 
@@ -455,26 +481,6 @@ function setupEventListeners(): void {
     elements.fileInput.value = '';
   });
 
-  // Resize input
-  elements.resizeInput.addEventListener('change', () => {
-    state.maxDimension = parseInt(elements.resizeInput.value) || 32;
-    if (state.originalImageData) {
-      processImage();
-    }
-  });
-
-  // Color count slider
-  elements.colorCountSlider.addEventListener('input', () => {
-    state.colorCount = parseInt(elements.colorCountSlider.value) || 8;
-    elements.colorCountValue.textContent = state.colorCount.toString();
-  });
-
-  elements.colorCountSlider.addEventListener('change', () => {
-    if (state.originalImageData) {
-      processImage();
-    }
-  });
-
   // Unit toggle
   elements.unitToggle.addEventListener('click', (e) => {
     const target = e.target as HTMLElement;
@@ -490,10 +496,61 @@ function setupEventListeners(): void {
     });
     label.classList.add('active');
 
+    const previousUnit = state.unit;
     state.unit = input.value as 'mm' | 'inches';
     elements.dimensionUnitLabel.textContent = state.unit;
 
+    // Convert all dimension values between units
+    if (previousUnit !== state.unit) {
+      if (state.unit === 'inches') {
+        // Converting from mm to inches
+        state.dimensionValue = state.dimensionValue / MM_PER_INCH;
+        state.pixelHeight = state.pixelHeight / MM_PER_INCH;
+        state.baseHeight = state.baseHeight / MM_PER_INCH;
+      } else {
+        // Converting from inches to mm
+        state.dimensionValue = state.dimensionValue * MM_PER_INCH;
+        state.pixelHeight = state.pixelHeight * MM_PER_INCH;
+        state.baseHeight = state.baseHeight * MM_PER_INCH;
+      }
+      // Round to reasonable precision
+      state.dimensionValue = Math.round(state.dimensionValue * 100) / 100;
+      state.pixelHeight = Math.round(state.pixelHeight * 1000) / 1000;
+      state.baseHeight = Math.round(state.baseHeight * 1000) / 1000;
+
+      // Update UI
+      elements.dimensionInput.value = state.dimensionValue.toString();
+      elements.pixelHeightSlider.value = state.pixelHeight.toString();
+      elements.pixelHeightValue.textContent = state.pixelHeight.toFixed(state.unit === 'inches' ? 2 : 1);
+      elements.baseHeightSlider.value = state.baseHeight.toString();
+      elements.baseHeightValue.textContent = state.baseHeight.toFixed(state.unit === 'inches' ? 2 : 1);
+
+      // Update slider ranges for the new unit
+      if (state.unit === 'inches') {
+        // Convert mm ranges to inches
+        elements.pixelHeightSlider.min = (0.5 / MM_PER_INCH).toFixed(3);
+        elements.pixelHeightSlider.max = (10 / MM_PER_INCH).toFixed(3);
+        elements.pixelHeightSlider.step = '0.01';
+        elements.baseHeightSlider.min = (0.5 / MM_PER_INCH).toFixed(3);
+        elements.baseHeightSlider.max = (5 / MM_PER_INCH).toFixed(3);
+        elements.baseHeightSlider.step = '0.01';
+      } else {
+        // Reset to mm ranges
+        elements.pixelHeightSlider.min = '0.5';
+        elements.pixelHeightSlider.max = '10';
+        elements.pixelHeightSlider.step = '0.1';
+        elements.baseHeightSlider.min = '0.5';
+        elements.baseHeightSlider.max = '5';
+        elements.baseHeightSlider.step = '0.1';
+      }
+    }
+
     updateDimensionsDisplay();
+
+    // Update grid to match unit
+    if (state.previewController) {
+      state.previewController.setUnit(state.unit);
+    }
 
     if (state.quantizedResult) {
       generateAndDisplay3D();
@@ -538,7 +595,7 @@ function setupEventListeners(): void {
   // Pixel height slider
   elements.pixelHeightSlider.addEventListener('input', () => {
     state.pixelHeight = parseFloat(elements.pixelHeightSlider.value) || 2;
-    elements.pixelHeightValue.textContent = state.pixelHeight.toFixed(1);
+    elements.pixelHeightValue.textContent = state.pixelHeight.toFixed(state.unit === 'inches' ? 2 : 1);
   });
 
   elements.pixelHeightSlider.addEventListener('change', () => {
@@ -547,10 +604,26 @@ function setupEventListeners(): void {
     }
   });
 
+  // Base toggle
+  elements.baseToggle.addEventListener('change', () => {
+    state.baseEnabled = elements.baseToggle.checked;
+
+    if (state.baseEnabled) {
+      elements.baseOptions.classList.remove('hidden');
+    } else {
+      elements.baseOptions.classList.add('hidden');
+    }
+
+    if (state.quantizedResult) {
+      updateColorPalette();
+      generateAndDisplay3D();
+    }
+  });
+
   // Base height slider
   elements.baseHeightSlider.addEventListener('input', () => {
     state.baseHeight = parseFloat(elements.baseHeightSlider.value) || 1;
-    elements.baseHeightValue.textContent = state.baseHeight.toFixed(1);
+    elements.baseHeightValue.textContent = state.baseHeight.toFixed(state.unit === 'inches' ? 2 : 1);
   });
 
   elements.baseHeightSlider.addEventListener('change', () => {
@@ -580,6 +653,44 @@ function setupEventListeners(): void {
 
     if (state.quantizedResult && state.keyholeEnabled) {
       generateAndDisplay3D();
+    }
+  });
+
+  // Base color picker
+  elements.baseColorInput.addEventListener('input', () => {
+    state.baseColor = elements.baseColorInput.value;
+    elements.baseColorValue.textContent = state.baseColor;
+
+    if (state.quantizedResult) {
+      updateColorPalette();
+      generateAndDisplay3D();
+    }
+  });
+
+  // Color merge toggle
+  elements.colorMergeToggle.addEventListener('change', () => {
+    state.colorMergeEnabled = elements.colorMergeToggle.checked;
+
+    if (state.colorMergeEnabled) {
+      elements.colorMergeOptions.classList.add('visible');
+    } else {
+      elements.colorMergeOptions.classList.remove('visible');
+    }
+
+    if (state.originalImageData) {
+      processImage();
+    }
+  });
+
+  // Color merge slider
+  elements.colorMergeSlider.addEventListener('input', () => {
+    state.colorMergeThreshold = parseInt(elements.colorMergeSlider.value) || 10;
+    elements.colorMergeValue.textContent = `${state.colorMergeThreshold}%`;
+  });
+
+  elements.colorMergeSlider.addEventListener('change', () => {
+    if (state.originalImageData && state.colorMergeEnabled) {
+      processImage();
     }
   });
 
@@ -631,14 +742,12 @@ function setupEventListeners(): void {
 
 function init(): void {
   // Set initial values from state
-  elements.resizeInput.value = state.maxDimension.toString();
-  elements.colorCountSlider.value = state.colorCount.toString();
-  elements.colorCountValue.textContent = state.colorCount.toString();
   elements.dimensionInput.value = state.dimensionValue.toString();
   elements.pixelHeightSlider.value = state.pixelHeight.toString();
   elements.pixelHeightValue.textContent = state.pixelHeight.toFixed(1);
   elements.baseHeightSlider.value = state.baseHeight.toString();
   elements.baseHeightValue.textContent = state.baseHeight.toFixed(1);
+  elements.baseColorInput.value = state.baseColor;
   elements.filenameInput.value = state.filename;
 
   // Setup event listeners

@@ -116,6 +116,7 @@ function createBoxGeometry(
   pixelSize: number,
   pixelHeight: number,
   baseHeight: number,
+  gridWidth: number,
   gridHeight: number
 ): THREE.BufferGeometry {
   const geometry = new THREE.BoxGeometry(
@@ -126,7 +127,8 @@ function createBoxGeometry(
 
   // Position the box: center it on the rectangle
   // Y position puts it on top of the base
-  const xPos = (rect.x + rect.width / 2) * pixelSize;
+  // Mirror X so left side of image appears on left side of model when viewed from front
+  const xPos = (gridWidth - rect.x - rect.width / 2) * pixelSize;
   const yPos = baseHeight + pixelHeight / 2;
   // Flip Z to match typical image coordinates (top of image = front)
   const zPos = (gridHeight - rect.y - rect.height / 2) * pixelSize;
@@ -172,7 +174,8 @@ function generateBaseGeometry(
       rect.height * pixelSize
     );
 
-    const xPos = (rect.x + rect.width / 2) * pixelSize;
+    // Mirror X so left side of image appears on left side of model when viewed from front
+    const xPos = (width - rect.x - rect.width / 2) * pixelSize;
     const yPos = baseHeight / 2;
     const zPos = (height - rect.y - rect.height / 2) * pixelSize;
 
@@ -240,15 +243,18 @@ function applyKeyhole(
     }
   }
 
+  // Mirror X coordinates to match the mirrored geometry
   switch (position) {
     case 'top-left':
-      keyholeX = (leftmostX + 1.5) * pixelSize;
+      // Top-left in image space = high X in mirrored 3D space
+      keyholeX = (width - leftmostX - 1.5) * pixelSize;
       break;
     case 'top-center':
-      keyholeX = ((leftmostX + rightmostX) / 2 + 0.5) * pixelSize;
+      keyholeX = (width - (leftmostX + rightmostX) / 2 - 0.5) * pixelSize;
       break;
     case 'top-right':
-      keyholeX = (rightmostX - 0.5) * pixelSize;
+      // Top-right in image space = low X in mirrored 3D space
+      keyholeX = (width - rightmostX + 0.5) * pixelSize;
       break;
   }
 
@@ -307,6 +313,25 @@ function applyKeyhole(
 }
 
 /**
+ * Rotates geometry to lay flat on the build plate (face up) for 3D printing.
+ * Transforms from Y-up orientation to Z-up orientation.
+ * The face (top surface with colors) will face upward (+Z).
+ * Also mirrors X back to correct orientation (undoing the preview mirror).
+ *
+ * @param geometry - The geometry to rotate (will be modified in place)
+ * @returns The same geometry, rotated and mirrored
+ */
+export function rotateForPrinting(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
+  // Mirror X back to original orientation (undo preview mirror)
+  geometry.scale(-1, 1, 1);
+
+  // Rotate -90 degrees around X axis to lay flat
+  // This transforms Y-up to Z-up (model lays flat, face pointing up)
+  geometry.rotateX(-Math.PI / 2);
+  return geometry;
+}
+
+/**
  * Main function to generate 3D meshes from a pixel grid
  */
 export function generateMeshes(params: MeshGeneratorParams): MeshResult {
@@ -319,6 +344,7 @@ export function generateMeshes(params: MeshGeneratorParams): MeshResult {
   } = params;
 
   const gridHeight = pixelGrid.length;
+  const gridWidth = pixelGrid[0]?.length ?? 0;
 
   // Apply greedy meshing to get merged rectangles
   const mergedRects = greedyMesh(pixelGrid);
@@ -336,7 +362,7 @@ export function generateMeshes(params: MeshGeneratorParams): MeshResult {
 
   for (const [colorIndex, rects] of rectsByColor) {
     const geometries = rects.map(rect =>
-      createBoxGeometry(rect, pixelSize, pixelHeight, baseHeight, gridHeight)
+      createBoxGeometry(rect, pixelSize, pixelHeight, baseHeight, gridWidth, gridHeight)
     );
 
     if (geometries.length > 0) {

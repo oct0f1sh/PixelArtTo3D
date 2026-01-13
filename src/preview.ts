@@ -5,11 +5,16 @@ export interface PreviewController {
   updateMesh(meshes: THREE.Mesh[]): void;
   dispose(): void;
   resetCamera(): void;
+  setUnit(unit: 'mm' | 'inches'): void;
 }
 
 const BACKGROUND_COLOR = 0x1a1a1a;
-const BASE_COLOR = 0x808080;
-const DEFAULT_CAMERA_POSITION = new THREE.Vector3(10, 10, 10);
+const GRID_COLOR = 0x444444;
+const DEFAULT_CAMERA_POSITION = new THREE.Vector3(50, 50, -50);
+
+// Grid spacing: 10mm for metric (1cm), 25.4mm for imperial (1 inch)
+const MM_GRID_SPACING = 10;
+const INCH_GRID_SPACING = 25.4;
 
 export function initPreview(container: HTMLElement): PreviewController {
   // Scene setup
@@ -59,8 +64,9 @@ export function initPreview(container: HTMLElement): PreviewController {
   const meshGroup = new THREE.Group();
   scene.add(meshGroup);
 
-  // Base plate (will be sized based on mesh data)
-  let basePlate: THREE.Mesh | null = null;
+  // Grid helper (will be sized based on mesh data)
+  let gridHelper: THREE.GridHelper | null = null;
+  let currentUnit: 'mm' | 'inches' = 'mm';
 
   // Track current meshes for disposal
   const currentMeshes: THREE.Mesh[] = [];
@@ -94,6 +100,31 @@ export function initPreview(container: HTMLElement): PreviewController {
   const resizeObserver = new ResizeObserver(handleResize);
   resizeObserver.observe(container);
 
+  // Create or update the grid helper
+  function updateGrid(boundingBox: THREE.Box3): void {
+    // Remove old grid
+    if (gridHelper) {
+      scene.remove(gridHelper);
+      gridHelper.dispose();
+      gridHelper = null;
+    }
+
+    const size = new THREE.Vector3();
+    boundingBox.getSize(size);
+
+    // Calculate grid size to cover the model with some padding
+    const gridSpacing = currentUnit === 'mm' ? MM_GRID_SPACING : INCH_GRID_SPACING;
+    const maxSize = Math.max(size.x, size.z) + gridSpacing * 4;
+    const gridSize = Math.ceil(maxSize / gridSpacing) * gridSpacing;
+    const divisions = Math.ceil(gridSize / gridSpacing);
+
+    // Create grid helper
+    gridHelper = new THREE.GridHelper(gridSize, divisions, GRID_COLOR, GRID_COLOR);
+    gridHelper.material.transparent = true;
+    gridHelper.material.opacity = 0.5;
+    scene.add(gridHelper);
+  }
+
   // Controller methods
   function updateMesh(meshes: THREE.Mesh[]): void {
     // Clear existing meshes
@@ -108,16 +139,11 @@ export function initPreview(container: HTMLElement): PreviewController {
     });
     currentMeshes.length = 0;
 
-    // Remove old base plate
-    if (basePlate) {
-      scene.remove(basePlate);
-      basePlate.geometry.dispose();
-      if (Array.isArray(basePlate.material)) {
-        basePlate.material.forEach((m) => m.dispose());
-      } else {
-        basePlate.material.dispose();
-      }
-      basePlate = null;
+    // Remove old grid
+    if (gridHelper) {
+      scene.remove(gridHelper);
+      gridHelper.dispose();
+      gridHelper = null;
     }
 
     if (meshes.length === 0) return;
@@ -137,30 +163,40 @@ export function initPreview(container: HTMLElement): PreviewController {
       currentMeshes.push(mesh);
     });
 
-    // Create base plate beneath the pixels
+    // Get center and size for positioning
     const size = new THREE.Vector3();
     boundingBox.getSize(size);
     const center = new THREE.Vector3();
     boundingBox.getCenter(center);
 
-    const baseGeometry = new THREE.BoxGeometry(
-      size.x + 2,
-      0.2,
-      size.z + 2
-    );
-    const baseMaterial = new THREE.MeshStandardMaterial({
-      color: BASE_COLOR,
-      roughness: 0.8,
-      metalness: 0.2,
-    });
-    basePlate = new THREE.Mesh(baseGeometry, baseMaterial);
-    basePlate.position.set(center.x, boundingBox.min.y - 0.1, center.z);
-    scene.add(basePlate);
-
-    // Center the mesh group
+    // Center the mesh group so it sits on the grid (Y=0)
     meshGroup.position.set(-center.x, -boundingBox.min.y, -center.z);
-    if (basePlate) {
-      basePlate.position.set(0, -0.1, 0);
+
+    // Create grid beneath the model
+    updateGrid(boundingBox);
+  }
+
+  function setUnit(unit: 'mm' | 'inches'): void {
+    if (currentUnit === unit) return;
+    currentUnit = unit;
+
+    // Recalculate grid if meshes are present
+    if (currentMeshes.length > 0) {
+      const boundingBox = new THREE.Box3();
+      currentMeshes.forEach((mesh) => {
+        mesh.geometry.computeBoundingBox();
+        const meshBox = mesh.geometry.boundingBox!.clone();
+        // Apply mesh world matrix and group position
+        const worldMatrix = new THREE.Matrix4();
+        worldMatrix.compose(
+          new THREE.Vector3().addVectors(mesh.position, meshGroup.position),
+          mesh.quaternion,
+          mesh.scale
+        );
+        meshBox.applyMatrix4(worldMatrix);
+        boundingBox.union(meshBox);
+      });
+      updateGrid(boundingBox);
     }
   }
 
@@ -196,16 +232,11 @@ export function initPreview(container: HTMLElement): PreviewController {
     });
     currentMeshes.length = 0;
 
-    // Dispose base plate
-    if (basePlate) {
-      scene.remove(basePlate);
-      basePlate.geometry.dispose();
-      if (Array.isArray(basePlate.material)) {
-        basePlate.material.forEach((m) => m.dispose());
-      } else {
-        basePlate.material.dispose();
-      }
-      basePlate = null;
+    // Dispose grid
+    if (gridHelper) {
+      scene.remove(gridHelper);
+      gridHelper.dispose();
+      gridHelper = null;
     }
 
     // Dispose renderer
@@ -221,5 +252,6 @@ export function initPreview(container: HTMLElement): PreviewController {
     updateMesh,
     dispose,
     resetCamera,
+    setUnit,
   };
 }
