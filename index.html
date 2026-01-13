@@ -5,9 +5,332 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Pixel Art to 3D Converter</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <div id="app"></div>
+    <div class="app-container">
+      <header class="app-header">
+        <h1>Pixel Art to 3D Converter</h1>
+        <p>Transform your pixel art into 3D printable keychains and models</p>
+      </header>
+
+      <main class="main-layout">
+        <!-- Left Column: Input and Settings -->
+        <section class="column column-left">
+          <!-- Image Upload Panel -->
+          <article class="panel" id="upload-panel">
+            <header class="panel-header">
+              <h2>Image Input</h2>
+            </header>
+
+            <div class="drop-zone" id="drop-zone">
+              <div class="drop-zone-icon">📁</div>
+              <p class="drop-zone-text">
+                <strong>Drop your pixel art here</strong> or click to browse
+              </p>
+              <p class="drop-zone-hint">Supports PNG, JPG, GIF, WebP</p>
+              <input
+                type="file"
+                id="file-input"
+                class="drop-zone-input"
+                accept="image/png,image/jpeg,image/gif,image/webp"
+              />
+            </div>
+
+            <div class="image-preview" id="image-preview">
+              <img id="preview-image" src="" alt="Uploaded pixel art preview" />
+              <div class="image-info">
+                <span id="image-dimensions">-- x -- px</span>
+                <span id="image-filename">--</span>
+              </div>
+              <button type="button" class="canvas-control-btn" id="clear-image-btn">
+                Clear Image
+              </button>
+            </div>
+          </article>
+
+          <!-- Resize Settings Panel -->
+          <article class="panel" id="resize-panel">
+            <header class="panel-header">
+              <h2>Image Resize</h2>
+            </header>
+
+            <div class="control-group">
+              <label class="control-label" for="resize-input">
+                Target Max Dimension (pixels)
+              </label>
+              <input
+                type="number"
+                id="resize-input"
+                min="8"
+                max="128"
+                value="32"
+                step="1"
+              />
+              <p class="control-hint">
+                Resize image to fit within this dimension while preserving aspect ratio
+              </p>
+            </div>
+
+            <div class="control-group">
+              <label class="control-label" for="color-count-slider">
+                Color Count
+              </label>
+              <div class="range-container">
+                <input
+                  type="range"
+                  id="color-count-slider"
+                  class="range-slider"
+                  min="2"
+                  max="16"
+                  value="8"
+                  step="1"
+                />
+                <span class="range-value" id="color-count-value">8</span>
+              </div>
+              <p class="control-hint">
+                Number of colors to quantize the image to (2-16)
+              </p>
+            </div>
+          </article>
+
+          <!-- Physical Dimensions Panel -->
+          <article class="panel" id="dimensions-panel">
+            <header class="panel-header">
+              <h2>Physical Dimensions</h2>
+            </header>
+
+            <div class="control-group">
+              <label class="control-label">Unit</label>
+              <div class="toggle-group" id="unit-toggle">
+                <label class="toggle-option active">
+                  <input type="radio" name="unit" value="mm" checked />
+                  mm
+                </label>
+                <label class="toggle-option">
+                  <input type="radio" name="unit" value="inches" />
+                  inches
+                </label>
+              </div>
+            </div>
+
+            <div class="control-group">
+              <label class="control-label">Set Dimension</label>
+              <div class="toggle-group" id="dimension-toggle">
+                <label class="toggle-option active">
+                  <input type="radio" name="set-dimension" value="width" checked />
+                  Width
+                </label>
+                <label class="toggle-option">
+                  <input type="radio" name="set-dimension" value="height" />
+                  Height
+                </label>
+              </div>
+            </div>
+
+            <div class="control-group">
+              <label class="control-label" for="dimension-input">
+                <span id="dimension-input-label">Width</span>
+                (<span id="dimension-unit-label">mm</span>)
+              </label>
+              <input
+                type="number"
+                id="dimension-input"
+                min="5"
+                max="200"
+                value="30"
+                step="0.1"
+              />
+            </div>
+
+            <div class="dimension-display" id="output-dimensions">
+              <div class="dimension">
+                <div class="dimension-value" id="output-width">30.0</div>
+                <div class="dimension-label">Width (<span class="output-unit">mm</span>)</div>
+              </div>
+              <div class="dimension-separator">×</div>
+              <div class="dimension">
+                <div class="dimension-value" id="output-height">--</div>
+                <div class="dimension-label">Height (<span class="output-unit">mm</span>)</div>
+              </div>
+            </div>
+          </article>
+
+          <!-- Height Settings Panel -->
+          <article class="panel" id="height-panel">
+            <header class="panel-header">
+              <h2>3D Height Settings</h2>
+            </header>
+
+            <div class="control-group">
+              <label class="control-label" for="pixel-height-slider">
+                Pixel Height (<span class="height-unit">mm</span>)
+              </label>
+              <div class="range-container">
+                <input
+                  type="range"
+                  id="pixel-height-slider"
+                  class="range-slider"
+                  min="0.5"
+                  max="10"
+                  value="2"
+                  step="0.1"
+                />
+                <span class="range-value" id="pixel-height-value">2.0</span>
+              </div>
+              <p class="control-hint">
+                Height of raised pixels (0.5-10)
+              </p>
+            </div>
+
+            <div class="control-group">
+              <label class="control-label" for="base-height-slider">
+                Base Height (<span class="height-unit">mm</span>)
+              </label>
+              <div class="range-container">
+                <input
+                  type="range"
+                  id="base-height-slider"
+                  class="range-slider"
+                  min="0.5"
+                  max="5"
+                  value="1"
+                  step="0.1"
+                />
+                <span class="range-value" id="base-height-value">1.0</span>
+              </div>
+              <p class="control-hint">
+                Thickness of the base layer (0.5-5)
+              </p>
+            </div>
+          </article>
+
+          <!-- Keyhole Settings Panel -->
+          <article class="panel" id="keyhole-panel">
+            <header class="panel-header">
+              <h2>Keyhole Options</h2>
+            </header>
+
+            <div class="control-group">
+              <label class="checkbox-group">
+                <input
+                  type="checkbox"
+                  id="keyhole-toggle"
+                  class="checkbox-input"
+                />
+                <span class="checkbox-label">Add keyhole for hanging</span>
+              </label>
+            </div>
+
+            <div class="keyhole-options" id="keyhole-options">
+              <div class="control-group">
+                <label class="control-label" for="keyhole-position">
+                  Keyhole Position
+                </label>
+                <select id="keyhole-position">
+                  <option value="top-left">Top Left</option>
+                  <option value="top-center" selected>Top Center</option>
+                  <option value="top-right">Top Right</option>
+                </select>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <!-- Right Column: Preview and Export -->
+        <section class="column column-right">
+          <!-- 3D Preview Panel -->
+          <article class="panel" id="preview-panel">
+            <header class="panel-header">
+              <h2>3D Preview</h2>
+            </header>
+
+            <div class="preview-canvas-container" id="preview-container">
+              <canvas id="preview-canvas"></canvas>
+              <div class="canvas-placeholder" id="canvas-placeholder">
+                <div class="canvas-placeholder-icon">🎲</div>
+                <p>Upload an image to see 3D preview</p>
+              </div>
+            </div>
+
+            <div class="canvas-controls">
+              <button type="button" class="canvas-control-btn" id="reset-view-btn">
+                Reset View
+              </button>
+              <button type="button" class="canvas-control-btn" id="toggle-wireframe-btn">
+                Wireframe
+              </button>
+              <button type="button" class="canvas-control-btn" id="toggle-auto-rotate-btn">
+                Auto Rotate
+              </button>
+            </div>
+          </article>
+
+          <!-- Color Palette Panel -->
+          <article class="panel" id="palette-panel">
+            <header class="panel-header">
+              <h2>Color Palette</h2>
+              <span class="badge" id="palette-count">0 colors</span>
+            </header>
+
+            <div class="color-palette" id="color-palette">
+              <div class="color-palette-empty">
+                No colors extracted yet. Upload an image to see the palette.
+              </div>
+            </div>
+          </article>
+
+          <!-- Export Panel -->
+          <article class="panel" id="export-panel">
+            <header class="panel-header">
+              <h2>Export</h2>
+            </header>
+
+            <div class="export-section">
+              <div class="control-group">
+                <label class="control-label">Export Format</label>
+                <div class="toggle-group" id="format-toggle">
+                  <label class="toggle-option active">
+                    <input type="radio" name="export-format" value="stl" checked />
+                    STL
+                  </label>
+                  <label class="toggle-option">
+                    <input type="radio" name="export-format" value="3mf" />
+                    3MF
+                  </label>
+                </div>
+                <p class="control-hint" id="format-hint">
+                  Single color mesh, widely compatible
+                </p>
+              </div>
+
+              <div class="control-group">
+                <label class="control-label" for="filename-input">
+                  Filename
+                </label>
+                <div class="export-filename">
+                  <input
+                    type="text"
+                    id="filename-input"
+                    value="original_keychain"
+                    placeholder="Enter filename"
+                  />
+                  <span class="extension" id="file-extension">.stl</span>
+                </div>
+              </div>
+
+              <div class="status-message" id="export-status"></div>
+
+              <button type="button" class="download-btn" id="download-btn" disabled>
+                <span class="download-btn-icon">⬇</span>
+                Download Model
+              </button>
+            </div>
+          </article>
+        </section>
+      </main>
+    </div>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
