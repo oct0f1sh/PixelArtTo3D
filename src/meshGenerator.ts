@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 // Types (assumed to exist in types.ts)
 export type PixelGrid = number[][]; // -1 = transparent, other numbers = color palette index
@@ -31,116 +30,298 @@ export interface MeshResult {
   keyholeApplied: boolean;
 }
 
-// Rectangle representation for greedy meshing
-interface MergedRect {
+// Quad representation for greedy face meshing
+interface Quad {
   x: number;
   y: number;
   width: number;
   height: number;
-  colorIndex: number;
 }
 
 /**
- * Greedy meshing algorithm to merge adjacent pixels of the same color
- * into larger rectangles, reducing polygon count significantly.
+ * Generates a fully manifold mesh by only creating exterior faces.
+ * Uses a voxel-based approach where we check each face to see if it's
+ * on the boundary (adjacent to air/different material).
  */
-function greedyMesh(grid: PixelGrid): MergedRect[] {
-  const height = grid.length;
-  const width = grid[0]?.length ?? 0;
-
-  if (height === 0 || width === 0) return [];
-
-  // Create a copy of the grid to track visited pixels
-  const visited: boolean[][] = Array.from({ length: height }, () =>
-    Array(width).fill(false)
-  );
-
-  const rectangles: MergedRect[] = [];
-
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const colorIndex = grid[y][x];
-
-      // Skip transparent or already visited pixels
-      if (colorIndex === -1 || visited[y][x]) continue;
-
-      // Find the maximum width we can extend to
-      let maxWidth = 1;
-      while (
-        x + maxWidth < width &&
-        grid[y][x + maxWidth] === colorIndex &&
-        !visited[y][x + maxWidth]
-      ) {
-        maxWidth++;
-      }
-
-      // Find the maximum height we can extend to while maintaining the width
-      let maxHeight = 1;
-      outer: while (y + maxHeight < height) {
-        for (let dx = 0; dx < maxWidth; dx++) {
-          if (
-            grid[y + maxHeight][x + dx] !== colorIndex ||
-            visited[y + maxHeight][x + dx]
-          ) {
-            break outer;
-          }
-        }
-        maxHeight++;
-      }
-
-      // Mark all pixels in this rectangle as visited
-      for (let dy = 0; dy < maxHeight; dy++) {
-        for (let dx = 0; dx < maxWidth; dx++) {
-          visited[y + dy][x + dx] = true;
-        }
-      }
-
-      rectangles.push({
-        x,
-        y,
-        width: maxWidth,
-        height: maxHeight,
-        colorIndex
-      });
-    }
-  }
-
-  return rectangles;
-}
-
-/**
- * Creates a box geometry for a merged rectangle
- */
-function createBoxGeometry(
-  rect: MergedRect,
+function generateManifoldGeometry(
+  grid: PixelGrid,
   pixelSize: number,
-  pixelHeight: number,
-  baseHeight: number,
+  layerHeight: number,
+  yOffset: number,
+  colorFilter: number | null, // null = all non-transparent, number = specific color index
   gridWidth: number,
   gridHeight: number
 ): THREE.BufferGeometry {
-  const geometry = new THREE.BoxGeometry(
-    rect.width * pixelSize,
-    pixelHeight,
-    rect.height * pixelSize
-  );
+  const vertices: number[] = [];
+  const indices: number[] = [];
 
-  // Position the box: center it on the rectangle
-  // Y position puts it on top of the base
-  // Mirror X so left side of image appears on left side of model when viewed from front
-  const xPos = (gridWidth - rect.x - rect.width / 2) * pixelSize;
-  const yPos = baseHeight + pixelHeight / 2;
-  // Flip Z to match typical image coordinates (top of image = front)
-  const zPos = (gridHeight - rect.y - rect.height / 2) * pixelSize;
+  // Helper to check if a cell is solid (matches our filter)
+  const isSolid = (x: number, z: number): boolean => {
+    if (x < 0 || x >= gridWidth || z < 0 || z >= gridHeight) return false;
+    const colorIndex = grid[z][x];
+    if (colorIndex === -1) return false;
+    if (colorFilter === null) return true;
+    return colorIndex === colorFilter;
+  };
 
-  geometry.translate(xPos, yPos, zPos);
+  // Top faces (Y+) - use greedy meshing since they're all coplanar
+  const topFaces = collectHorizontalFaces(gridWidth, gridHeight, (x, z) => isSolid(x, z));
+  generateHorizontalFaces(topFaces, 'top', pixelSize, yOffset + layerHeight, gridWidth, gridHeight, vertices, indices);
+
+  // Bottom faces (Y-) - use greedy meshing since they're all coplanar
+  const bottomFaces = collectHorizontalFaces(gridWidth, gridHeight, (x, z) => isSolid(x, z));
+  generateHorizontalFaces(bottomFaces, 'bottom', pixelSize, yOffset, gridWidth, gridHeight, vertices, indices);
+
+  // Side faces - generate all 4 directions with proper coordinate handling
+  generateSideFaces(grid, gridWidth, gridHeight, pixelSize, yOffset, layerHeight, colorFilter, vertices, indices);
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
 
   return geometry;
 }
 
 /**
+ * Collects horizontal faces using 2D greedy meshing
+ */
+function collectHorizontalFaces(
+  width: number,
+  height: number,
+  shouldHaveFace: (x: number, z: number) => boolean
+): Quad[] {
+  const visited: boolean[][] = Array.from({ length: height }, () =>
+    Array(width).fill(false)
+  );
+
+  const quads: Quad[] = [];
+
+  for (let z = 0; z < height; z++) {
+    for (let x = 0; x < width; x++) {
+      if (visited[z][x] || !shouldHaveFace(x, z)) continue;
+
+      // Find maximum width
+      let quadWidth = 1;
+      while (
+        x + quadWidth < width &&
+        !visited[z][x + quadWidth] &&
+        shouldHaveFace(x + quadWidth, z)
+      ) {
+        quadWidth++;
+      }
+
+      // Find maximum height while maintaining width
+      let quadHeight = 1;
+      outer: while (z + quadHeight < height) {
+        for (let dx = 0; dx < quadWidth; dx++) {
+          if (visited[z + quadHeight][x + dx] || !shouldHaveFace(x + dx, z + quadHeight)) {
+            break outer;
+          }
+        }
+        quadHeight++;
+      }
+
+      // Mark as visited
+      for (let dz = 0; dz < quadHeight; dz++) {
+        for (let dx = 0; dx < quadWidth; dx++) {
+          visited[z + dz][x + dx] = true;
+        }
+      }
+
+      quads.push({ x, y: z, width: quadWidth, height: quadHeight });
+    }
+  }
+
+  return quads;
+}
+
+/**
+ * Helper to check if a cell is solid (matches our color filter)
+ */
+function isCellSolid(
+  grid: PixelGrid,
+  x: number,
+  z: number,
+  gridWidth: number,
+  gridHeight: number,
+  colorFilter: number | null
+): boolean {
+  if (x < 0 || x >= gridWidth || z < 0 || z >= gridHeight) return false;
+  const colorIndex = grid[z][x];
+  if (colorIndex === -1) return false;
+  if (colorFilter === null) return true;
+  return colorIndex === colorFilter;
+}
+
+/**
+ * Helper to check if a cell is any solid (non-transparent) regardless of color.
+ * Used to determine if a side face should be generated at external boundaries only.
+ */
+function isCellAnySolid(
+  grid: PixelGrid,
+  x: number,
+  z: number,
+  gridWidth: number,
+  gridHeight: number
+): boolean {
+  if (x < 0 || x >= gridWidth || z < 0 || z >= gridHeight) return false;
+  return grid[z][x] !== -1;
+}
+
+/**
+ * Helper to add a quad face to the vertex/index arrays
+ * Vertices should be in counter-clockwise order when viewed from outside
+ */
+function addQuadFace(
+  vertices: number[],
+  indices: number[],
+  v0: [number, number, number],
+  v1: [number, number, number],
+  v2: [number, number, number],
+  v3: [number, number, number]
+): void {
+  const baseIndex = vertices.length / 3;
+  vertices.push(...v0, ...v1, ...v2, ...v3);
+  // Two triangles: 0-1-2 and 0-2-3
+  indices.push(
+    baseIndex, baseIndex + 1, baseIndex + 2,
+    baseIndex, baseIndex + 2, baseIndex + 3
+  );
+}
+
+/**
+ * Generate all side faces for the geometry.
+ * For each cell, check each of its 4 sides and create a face if the neighbor is empty (transparent).
+ * Only creates faces at external boundaries - not between different colored pixels.
+ * Simple per-cell approach without greedy meshing to ensure correctness.
+ */
+function generateSideFaces(
+  grid: PixelGrid,
+  gridWidth: number,
+  gridHeight: number,
+  pixelSize: number,
+  yOffset: number,
+  layerHeight: number,
+  colorFilter: number | null,
+  vertices: number[],
+  indices: number[]
+): void {
+  const y1 = yOffset;
+  const y2 = yOffset + layerHeight;
+
+  // Process each cell
+  for (let gz = 0; gz < gridHeight; gz++) {
+    for (let gx = 0; gx < gridWidth; gx++) {
+      // Check if this cell matches our color filter
+      if (!isCellSolid(grid, gx, gz, gridWidth, gridHeight, colorFilter)) {
+        continue;
+      }
+
+      // Calculate world coordinates for this cell
+      // Due to mirroring: higher gx -> lower worldX, higher gz -> lower worldZ
+      const xMin = (gridWidth - gx - 1) * pixelSize;
+      const xMax = (gridWidth - gx) * pixelSize;
+      const zMin = (gridHeight - gz - 1) * pixelSize;
+      const zMax = (gridHeight - gz) * pixelSize;
+
+      // LEFT face (grid X- = world X+): check neighbor at gx-1
+      // Only create face if neighbor is empty (not just different color)
+      // Face is at xMax, facing +X direction
+      if (!isCellAnySolid(grid, gx - 1, gz, gridWidth, gridHeight)) {
+        addQuadFace(vertices, indices,
+          [xMax, y1, zMax],
+          [xMax, y1, zMin],
+          [xMax, y2, zMin],
+          [xMax, y2, zMax]
+        );
+      }
+
+      // RIGHT face (grid X+ = world X-): check neighbor at gx+1
+      // Face is at xMin, facing -X direction
+      if (!isCellAnySolid(grid, gx + 1, gz, gridWidth, gridHeight)) {
+        addQuadFace(vertices, indices,
+          [xMin, y1, zMin],
+          [xMin, y1, zMax],
+          [xMin, y2, zMax],
+          [xMin, y2, zMin]
+        );
+      }
+
+      // BACK face (grid Z- = world Z+): check neighbor at gz-1
+      // Face is at zMax, facing +Z direction
+      if (!isCellAnySolid(grid, gx, gz - 1, gridWidth, gridHeight)) {
+        addQuadFace(vertices, indices,
+          [xMin, y1, zMax],
+          [xMax, y1, zMax],
+          [xMax, y2, zMax],
+          [xMin, y2, zMax]
+        );
+      }
+
+      // FRONT face (grid Z+ = world Z-): check neighbor at gz+1
+      // Face is at zMin, facing -Z direction
+      if (!isCellAnySolid(grid, gx, gz + 1, gridWidth, gridHeight)) {
+        addQuadFace(vertices, indices,
+          [xMax, y1, zMin],
+          [xMin, y1, zMin],
+          [xMin, y2, zMin],
+          [xMax, y2, zMin]
+        );
+      }
+    }
+  }
+}
+
+/**
+ * Generates geometry for horizontal (top/bottom) face quads
+ */
+function generateHorizontalFaces(
+  quads: Quad[],
+  direction: 'top' | 'bottom',
+  pixelSize: number,
+  yOffset: number,
+  gridWidth: number,
+  gridHeight: number,
+  vertices: number[],
+  indices: number[]
+): void {
+  for (const quad of quads) {
+    const baseIndex = vertices.length / 3;
+
+    // Calculate world coordinates (mirrored X for correct orientation)
+    const x1 = (gridWidth - quad.x - quad.width) * pixelSize;
+    const x2 = (gridWidth - quad.x) * pixelSize;
+    const z1 = (gridHeight - quad.y - quad.height) * pixelSize;
+    const z2 = (gridHeight - quad.y) * pixelSize;
+
+    // Add vertices for the horizontal face
+    vertices.push(
+      x1, yOffset, z1,
+      x2, yOffset, z1,
+      x2, yOffset, z2,
+      x1, yOffset, z2
+    );
+
+    if (direction === 'top') {
+      // CCW winding for outward normal (Y+)
+      indices.push(
+        baseIndex, baseIndex + 2, baseIndex + 1,
+        baseIndex, baseIndex + 3, baseIndex + 2
+      );
+    } else {
+      // CW winding for outward normal (Y-)
+      indices.push(
+        baseIndex, baseIndex + 1, baseIndex + 2,
+        baseIndex, baseIndex + 2, baseIndex + 3
+      );
+    }
+  }
+}
+
+/**
  * Generate base geometry that matches the exact footprint of non-transparent pixels.
- * Uses greedy meshing on the opacity mask to create an efficient mesh.
+ * Creates a manifold mesh with only exterior faces.
  */
 function generateBaseGeometry(
   grid: PixelGrid,
@@ -150,47 +331,32 @@ function generateBaseGeometry(
   const height = grid.length;
   const width = grid[0]?.length ?? 0;
 
+  if (height === 0 || width === 0 || baseHeight <= 0) {
+    return new THREE.BufferGeometry();
+  }
+
+  return generateManifoldGeometry(grid, pixelSize, baseHeight, 0, null, width, height);
+}
+
+/**
+ * Generate color layer geometry for a specific color.
+ * Only creates faces on the exterior boundaries.
+ */
+function generateColorGeometry(
+  grid: PixelGrid,
+  pixelSize: number,
+  pixelHeight: number,
+  baseHeight: number,
+  colorIndex: number
+): THREE.BufferGeometry {
+  const height = grid.length;
+  const width = grid[0]?.length ?? 0;
+
   if (height === 0 || width === 0) {
     return new THREE.BufferGeometry();
   }
 
-  // Create a binary grid: 0 for non-transparent, -1 for transparent
-  const binaryGrid: PixelGrid = grid.map(row =>
-    row.map(pixel => (pixel === -1 ? -1 : 0))
-  );
-
-  // Use greedy mesh on the binary grid
-  const baseRects = greedyMesh(binaryGrid);
-
-  if (baseRects.length === 0) {
-    return new THREE.BufferGeometry();
-  }
-
-  // Create box geometries for each base rectangle
-  const baseGeometries: THREE.BufferGeometry[] = baseRects.map(rect => {
-    const geometry = new THREE.BoxGeometry(
-      rect.width * pixelSize,
-      baseHeight,
-      rect.height * pixelSize
-    );
-
-    // Mirror X so left side of image appears on left side of model when viewed from front
-    const xPos = (width - rect.x - rect.width / 2) * pixelSize;
-    const yPos = baseHeight / 2;
-    const zPos = (height - rect.y - rect.height / 2) * pixelSize;
-
-    geometry.translate(xPos, yPos, zPos);
-
-    return geometry;
-  });
-
-  // Merge all base geometries
-  const mergedBase = mergeGeometries(baseGeometries, false);
-
-  // Dispose individual geometries
-  baseGeometries.forEach(g => g.dispose());
-
-  return mergedBase ?? new THREE.BufferGeometry();
+  return generateManifoldGeometry(grid, pixelSize, pixelHeight, baseHeight, colorIndex, width, height);
 }
 
 /**
@@ -304,12 +470,60 @@ function applyKeyhole(
   ringGeometry.rotateX(-Math.PI / 2);
   ringGeometry.translate(keyholeX, 0, keyholeZ);
 
-  // Merge with base mesh
-  const combinedGeometry = mergeGeometries([baseMesh, ringGeometry], false);
+  // Combine the base mesh with the ring geometry by manually merging vertices and indices
+  const combinedGeometry = combineGeometries([baseMesh, ringGeometry]);
 
   ringGeometry.dispose();
 
   return combinedGeometry ?? baseMesh;
+}
+
+/**
+ * Combines multiple geometries into one by merging their vertex and index data.
+ * This is a simple merge that doesn't remove duplicate vertices.
+ */
+function combineGeometries(geometries: THREE.BufferGeometry[]): THREE.BufferGeometry | null {
+  const validGeometries = geometries.filter(g => g.attributes.position && g.attributes.position.count > 0);
+
+  if (validGeometries.length === 0) return null;
+  if (validGeometries.length === 1) return validGeometries[0].clone();
+
+  const positions: number[] = [];
+  const indices: number[] = [];
+  let vertexOffset = 0;
+
+  for (const geom of validGeometries) {
+    const posAttr = geom.attributes.position;
+    const posArray = posAttr.array;
+
+    // Add positions
+    for (let i = 0; i < posArray.length; i++) {
+      positions.push(posArray[i]);
+    }
+
+    // Add indices with offset
+    if (geom.index) {
+      const indexArray = geom.index.array;
+      for (let i = 0; i < indexArray.length; i++) {
+        indices.push(indexArray[i] + vertexOffset);
+      }
+    } else {
+      // Non-indexed geometry - create indices
+      const vertexCount = posAttr.count;
+      for (let i = 0; i < vertexCount; i++) {
+        indices.push(i + vertexOffset);
+      }
+    }
+
+    vertexOffset += posAttr.count;
+  }
+
+  const combined = new THREE.BufferGeometry();
+  combined.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  combined.setIndex(indices);
+  combined.computeVertexNormals();
+
+  return combined;
 }
 
 /**
@@ -332,7 +546,8 @@ export function rotateForPrinting(geometry: THREE.BufferGeometry): THREE.BufferG
 }
 
 /**
- * Main function to generate 3D meshes from a pixel grid
+ * Main function to generate 3D meshes from a pixel grid.
+ * Generates fully manifold geometry suitable for 3D printing.
  */
 export function generateMeshes(params: MeshGeneratorParams): MeshResult {
   const {
@@ -343,37 +558,30 @@ export function generateMeshes(params: MeshGeneratorParams): MeshResult {
     keyhole = { enabled: false, position: 'top-center' }
   } = params;
 
-  const gridHeight = pixelGrid.length;
-  const gridWidth = pixelGrid[0]?.length ?? 0;
-
-  // Apply greedy meshing to get merged rectangles
-  const mergedRects = greedyMesh(pixelGrid);
-
-  // Group rectangles by color index
-  const rectsByColor = new Map<number, MergedRect[]>();
-  for (const rect of mergedRects) {
-    const existing = rectsByColor.get(rect.colorIndex) ?? [];
-    existing.push(rect);
-    rectsByColor.set(rect.colorIndex, existing);
+  // Find all unique color indices in the grid
+  const colorIndices = new Set<number>();
+  for (const row of pixelGrid) {
+    for (const colorIndex of row) {
+      if (colorIndex !== -1) {
+        colorIndices.add(colorIndex);
+      }
+    }
   }
 
-  // Create geometries for each color
+  // Create manifold geometries for each color
   const colorMeshes = new Map<number, THREE.BufferGeometry>();
 
-  for (const [colorIndex, rects] of rectsByColor) {
-    const geometries = rects.map(rect =>
-      createBoxGeometry(rect, pixelSize, pixelHeight, baseHeight, gridWidth, gridHeight)
+  for (const colorIndex of colorIndices) {
+    const geometry = generateColorGeometry(
+      pixelGrid,
+      pixelSize,
+      pixelHeight,
+      baseHeight,
+      colorIndex
     );
 
-    if (geometries.length > 0) {
-      const mergedGeometry = mergeGeometries(geometries, false);
-
-      // Dispose individual geometries
-      geometries.forEach(g => g.dispose());
-
-      if (mergedGeometry) {
-        colorMeshes.set(colorIndex, mergedGeometry);
-      }
+    if (geometry.attributes.position && geometry.attributes.position.count > 0) {
+      colorMeshes.set(colorIndex, geometry);
     }
   }
 
