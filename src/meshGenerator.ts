@@ -26,7 +26,7 @@ export interface MeshGeneratorParams {
 
 export interface MeshResult {
   colorMeshes: Map<number, THREE.BufferGeometry>;
-  baseMesh: THREE.BufferGeometry | null; // Deprecated: now null, each color is a complete extrusion
+  baseMesh: THREE.BufferGeometry | null; // Base layer covering all pixels (y=0 to y=baseHeight)
   keyholeApplied: boolean;
 }
 
@@ -242,9 +242,29 @@ function isCellSolid(
 }
 
 /**
- * Generate a complete standalone extrusion for a specific color.
- * Each color is its own independent mesh from y=0 to full height (baseHeight + pixelHeight).
- * This means deleting a color in a slicer removes those pixels entirely.
+ * Generate a base mesh covering all non-transparent pixels.
+ * The base goes from y=0 to y=baseHeight.
+ */
+function generateBaseGeometry(
+  grid: PixelGrid,
+  pixelSize: number,
+  baseHeight: number
+): THREE.BufferGeometry {
+  const height = grid.length;
+  const width = grid[0]?.length ?? 0;
+
+  if (height === 0 || width === 0) {
+    return new THREE.BufferGeometry();
+  }
+
+  // Base covers all non-transparent pixels (colorFilter = null means any non-transparent)
+  return generateManifoldGeometry(grid, pixelSize, baseHeight, 0, null, width, height);
+}
+
+/**
+ * Generate a color layer mesh for a specific color.
+ * Each color goes from y=baseHeight to y=baseHeight+pixelHeight.
+ * This sits on top of the base.
  */
 function generateColorGeometry(
   grid: PixelGrid,
@@ -260,10 +280,8 @@ function generateColorGeometry(
     return new THREE.BufferGeometry();
   }
 
-  // Total height: from bottom (y=0) to top (baseHeight + pixelHeight)
-  const totalHeight = baseHeight + pixelHeight;
-
-  return generateManifoldGeometry(grid, pixelSize, totalHeight, 0, colorIndex, width, height);
+  // Color layer starts at baseHeight and goes up by pixelHeight
+  return generateManifoldGeometry(grid, pixelSize, pixelHeight, baseHeight, colorIndex, width, height);
 }
 
 /**
@@ -287,8 +305,9 @@ export function rotateForPrinting(geometry: THREE.BufferGeometry): THREE.BufferG
 
 /**
  * Main function to generate 3D meshes from a pixel grid.
- * Each color is extruded as a complete, independent mesh from y=0 to full height.
- * This means deleting a color in a slicer removes those pixels entirely (no shared base).
+ * Creates a base mesh covering all pixels, plus separate color meshes on top.
+ * - Base: y=0 to y=baseHeight (covers all non-transparent pixels)
+ * - Colors: y=baseHeight to y=baseHeight+pixelHeight (each color is separate)
  */
 export function generateMeshes(params: MeshGeneratorParams): MeshResult {
   const {
@@ -308,7 +327,10 @@ export function generateMeshes(params: MeshGeneratorParams): MeshResult {
     }
   }
 
-  // Create manifold geometries for each color - each is a complete standalone extrusion
+  // Generate base mesh (covers all non-transparent pixels)
+  const baseMesh = generateBaseGeometry(pixelGrid, pixelSize, baseHeight);
+
+  // Create manifold geometries for each color layer (sits on top of base)
   const colorMeshes = new Map<number, THREE.BufferGeometry>();
 
   for (const colorIndex of colorIndices) {
@@ -325,10 +347,9 @@ export function generateMeshes(params: MeshGeneratorParams): MeshResult {
     }
   }
 
-  // No shared base mesh - each color is its own complete extrusion
   return {
     colorMeshes,
-    baseMesh: null,
+    baseMesh: baseMesh.attributes.position?.count > 0 ? baseMesh : null,
     keyholeApplied: false
   };
 }
@@ -398,6 +419,9 @@ export function getMeshStats(result: MeshResult): {
  * Dispose all geometries in a mesh result to free memory
  */
 export function disposeMeshResult(result: MeshResult): void {
+  if (result.baseMesh) {
+    result.baseMesh.dispose();
+  }
   for (const geometry of result.colorMeshes.values()) {
     geometry.dispose();
   }

@@ -363,8 +363,14 @@ async function handleExport(): Promise<void> {
   // Clone and rotate geometries for export (model should lay flat on build plate)
   const rotatedGeometries: THREE.BufferGeometry[] = [];
   const rotatedColorGeometries = new Map<number, THREE.BufferGeometry>();
+  let rotatedBaseMesh: THREE.BufferGeometry | null = null;
 
-  // Note: baseMesh is now always null - each color is a complete standalone extrusion
+  // Clone and rotate base mesh if it exists
+  if (state.meshResult.baseMesh && state.meshResult.baseMesh.attributes.position) {
+    rotatedBaseMesh = state.meshResult.baseMesh.clone();
+    rotateForPrinting(rotatedBaseMesh);
+    rotatedGeometries.push(rotatedBaseMesh);
+  }
 
   // Clone and rotate color meshes
   for (const [colorIndex, geometry] of state.meshResult.colorMeshes) {
@@ -382,10 +388,10 @@ async function handleExport(): Promise<void> {
       showStatus('STL file downloaded successfully!', 'success');
 
     } else {
-      // 3MF export - note: baseMesh is now null (each color is a complete standalone extrusion)
+      // 3MF export with base mesh and color layers
       await export3MF(
         rotatedColorGeometries,
-        new THREE.BufferGeometry(), // No shared base mesh
+        rotatedBaseMesh || new THREE.BufferGeometry(),
         state.quantizedResult.palette,
         filename
       );
