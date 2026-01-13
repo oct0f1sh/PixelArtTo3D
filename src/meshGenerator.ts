@@ -294,9 +294,6 @@ function generateColorGeometry(
  * @returns The same geometry, rotated and mirrored
  */
 export function rotateForPrinting(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
-  // Mirror X back to original orientation (undo preview mirror)
-  geometry.scale(-1, 1, 1);
-
   // Rotate -90 degrees around X axis to lay flat
   // This transforms Y-up to Z-up (model lays flat, face pointing up)
   geometry.rotateX(-Math.PI / 2);

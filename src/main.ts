@@ -330,7 +330,14 @@ async function generateAndDisplay3D(): Promise<void> {
   // Create Three.js meshes from the result
   const meshes: THREE.Mesh[] = [];
 
-  // Note: baseMesh is now always null - each color is a complete standalone extrusion
+  // Add base mesh with user-specified color
+  if (state.meshResult.baseMesh && state.meshResult.baseMesh.attributes.position) {
+    const baseMaterial = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(state.baseColor),
+    });
+    const baseMesh = new THREE.Mesh(state.meshResult.baseMesh, baseMaterial);
+    meshes.push(baseMesh);
+  }
 
   // Add colored meshes using MeshBasicMaterial for accurate colors
   for (const [colorIndex, geometry] of state.meshResult.colorMeshes) {
