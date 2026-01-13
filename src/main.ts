@@ -330,14 +330,7 @@ async function generateAndDisplay3D(): Promise<void> {
   // Create Three.js meshes from the result
   const meshes: THREE.Mesh[] = [];
 
-  // Add base mesh with customizable color (only if base is enabled)
-  if (state.baseEnabled && state.meshResult.baseMesh.attributes.position) {
-    const baseMaterial = new THREE.MeshBasicMaterial({
-      color: state.baseColor,
-    });
-    const baseMesh = new THREE.Mesh(state.meshResult.baseMesh, baseMaterial);
-    meshes.push(baseMesh);
-  }
+  // Note: baseMesh is now always null - each color is a complete standalone extrusion
 
   // Add colored meshes using MeshBasicMaterial for accurate colors
   for (const [colorIndex, geometry] of state.meshResult.colorMeshes) {
@@ -371,13 +364,7 @@ async function handleExport(): Promise<void> {
   const rotatedGeometries: THREE.BufferGeometry[] = [];
   const rotatedColorGeometries = new Map<number, THREE.BufferGeometry>();
 
-  // Clone and rotate base mesh (only if base is enabled)
-  let rotatedBaseMesh: THREE.BufferGeometry | null = null;
-  if (state.baseEnabled && state.meshResult.baseMesh.attributes.position) {
-    rotatedBaseMesh = state.meshResult.baseMesh.clone();
-    rotateForPrinting(rotatedBaseMesh);
-    rotatedGeometries.push(rotatedBaseMesh);
-  }
+  // Note: baseMesh is now always null - each color is a complete standalone extrusion
 
   // Clone and rotate color meshes
   for (const [colorIndex, geometry] of state.meshResult.colorMeshes) {
@@ -395,10 +382,10 @@ async function handleExport(): Promise<void> {
       showStatus('STL file downloaded successfully!', 'success');
 
     } else {
-      // 3MF export
+      // 3MF export - note: baseMesh is now null (each color is a complete standalone extrusion)
       await export3MF(
         rotatedColorGeometries,
-        rotatedBaseMesh || new THREE.BufferGeometry(),
+        new THREE.BufferGeometry(), // No shared base mesh
         state.quantizedResult.palette,
         filename
       );

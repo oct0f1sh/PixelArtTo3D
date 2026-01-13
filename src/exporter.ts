@@ -142,11 +142,12 @@ function geometryToMeshXML(geometry: THREE.BufferGeometry): { vertices: string; 
   const vertices: string[] = [];
   const triangles: string[] = [];
 
-  // Extract vertices
+  // Extract vertices with consistent precision
+  // Using 6 decimal places (micrometer precision for mm units)
   for (let i = 0; i < position.count; i++) {
-    const x = position.getX(i);
-    const y = position.getY(i);
-    const z = position.getZ(i);
+    const x = position.getX(i).toFixed(6);
+    const y = position.getY(i).toFixed(6);
+    const z = position.getZ(i).toFixed(6);
     vertices.push(`        <vertex x="${x}" y="${y}" z="${z}" />`);
   }
 
