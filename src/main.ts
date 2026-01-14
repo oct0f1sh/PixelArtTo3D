@@ -5,7 +5,7 @@
 
 import './style.css';
 import * as THREE from 'three';
-import { loadImage, quantizeColors } from './imageProcessor';
+import { loadImage, quantizeColors, removeBackground, resizeImage, getOptimalDimensions, resizePixelArt } from './imageProcessor';
 import { initPreview, type PreviewController } from './preview';
 import { generateMeshes, rotateForPrinting, type MeshResult } from './meshGenerator';
 import { exportSTL, export3MF } from './exporter';
@@ -36,6 +36,12 @@ interface AppState {
   keyholePosition: 'top-left' | 'top-center' | 'top-right';
   exportFormat: 'stl' | '3mf';
   filename: string;
+
+  // Background removal
+  bgRemoveEnabled: boolean;
+  bgColor: { r: number; g: number; b: number } | null;
+  bgTolerance: number;
+  eyedropperActive: boolean;
 }
 
 const state: AppState = {
@@ -58,6 +64,12 @@ const state: AppState = {
   keyholePosition: 'top-center',
   exportFormat: '3mf',
   filename: 'pixel_art_keychain',
+
+  // Background removal
+  bgRemoveEnabled: false,
+  bgColor: null,
+  bgTolerance: 10,
+  eyedropperActive: false,
 };
 
 // Conversion factor: 1 inch = 25.4mm
@@ -76,6 +88,14 @@ const elements = {
   imageDimensions: document.getElementById('image-dimensions') as HTMLSpanElement,
   imageFilename: document.getElementById('image-filename') as HTMLSpanElement,
   clearImageBtn: document.getElementById('clear-image-btn') as HTMLButtonElement,
+
+  // Background removal
+  bgRemoveToggle: document.getElementById('bg-remove-toggle') as HTMLInputElement,
+  bgRemoveOptions: document.getElementById('bg-remove-options') as HTMLDivElement,
+  bgColorPreview: document.getElementById('bg-color-preview') as HTMLDivElement,
+  eyedropperBtn: document.getElementById('eyedropper-btn') as HTMLButtonElement,
+  bgToleranceSlider: document.getElementById('bg-tolerance-slider') as HTMLInputElement,
+  bgToleranceValue: document.getElementById('bg-tolerance-value') as HTMLSpanElement,
 
   // Physical dimensions
   unitToggle: document.getElementById('unit-toggle') as HTMLDivElement,
@@ -191,9 +211,38 @@ async function handleImageFile(file: File): Promise<void> {
 async function processImage(): Promise<void> {
   if (!state.originalImageData) return;
 
-  // Extract colors from the native resolution image, optionally merging similar colors
+  // Detect optimal dimensions (handles upscaled pixel art and large images)
+  const { targetWidth, targetHeight, detectedScale, offsetX, offsetY } = getOptimalDimensions(state.originalImageData);
+
+  let imageDataToProcess = state.originalImageData;
+  const { width, height } = imageDataToProcess;
+
+  // Downscale if needed
+  if (targetWidth < width || targetHeight < height) {
+    if (detectedScale > 1) {
+      // Use pixel-art-aware resizing with grid offset for proper alignment
+      imageDataToProcess = resizePixelArt(imageDataToProcess, detectedScale, offsetX, offsetY);
+      console.log(`Pixel art downscaled: ${width}x${height} -> ${imageDataToProcess.width}x${imageDataToProcess.height}` +
+        ` (detected ${detectedScale}x scale, offset ${offsetX},${offsetY})`);
+    } else {
+      // Use standard resizing for non-pixel-art images
+      const maxTargetDim = Math.max(targetWidth, targetHeight);
+      imageDataToProcess = resizeImage(imageDataToProcess, maxTargetDim);
+      console.log(`Image downscaled: ${width}x${height} -> ${imageDataToProcess.width}x${imageDataToProcess.height}`);
+    }
+  }
+
+  // Apply background removal if enabled and a color is selected
+  if (state.bgRemoveEnabled && state.bgColor) {
+    imageDataToProcess = removeBackground(imageDataToProcess, {
+      color: state.bgColor,
+      tolerance: state.bgTolerance,
+    });
+  }
+
+  // Extract colors from the processed image, optionally merging similar colors
   const threshold = state.colorMergeEnabled ? state.colorMergeThreshold : 0;
-  state.quantizedResult = quantizeColors(state.originalImageData, threshold);
+  state.quantizedResult = quantizeColors(imageDataToProcess, threshold);
 
   // Update color palette display
   updateColorPalette();
@@ -479,6 +528,107 @@ function setupEventListeners(): void {
 
     // Reset file input
     elements.fileInput.value = '';
+
+    // Reset background removal
+    state.bgColor = null;
+    state.eyedropperActive = false;
+    elements.eyedropperBtn.classList.remove('active');
+    elements.imagePreview.classList.remove('eyedropper-mode');
+    elements.bgColorPreview.style.backgroundColor = '';
+    elements.bgColorPreview.classList.remove('has-color');
+  });
+
+  // Background removal toggle
+  elements.bgRemoveToggle.addEventListener('change', () => {
+    state.bgRemoveEnabled = elements.bgRemoveToggle.checked;
+
+    if (state.bgRemoveEnabled) {
+      elements.bgRemoveOptions.classList.add('visible');
+    } else {
+      elements.bgRemoveOptions.classList.remove('visible');
+      // Deactivate eyedropper when disabling
+      state.eyedropperActive = false;
+      elements.eyedropperBtn.classList.remove('active');
+      elements.imagePreview.classList.remove('eyedropper-mode');
+    }
+
+    if (state.originalImageData && state.bgColor) {
+      processImage();
+    }
+  });
+
+  // Eyedropper button
+  elements.eyedropperBtn.addEventListener('click', () => {
+    state.eyedropperActive = !state.eyedropperActive;
+
+    if (state.eyedropperActive) {
+      elements.eyedropperBtn.classList.add('active');
+      elements.imagePreview.classList.add('eyedropper-mode');
+    } else {
+      elements.eyedropperBtn.classList.remove('active');
+      elements.imagePreview.classList.remove('eyedropper-mode');
+    }
+  });
+
+  // Image click for eyedropper color picking
+  elements.previewImage.addEventListener('click', (e) => {
+    if (!state.eyedropperActive || !state.originalImageData) return;
+
+    const img = elements.previewImage;
+    const rect = img.getBoundingClientRect();
+
+    // Calculate the position relative to the image
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    // Scale to actual image dimensions
+    const scaleX = state.originalImageData.width / rect.width;
+    const scaleY = state.originalImageData.height / rect.height;
+
+    const pixelX = Math.floor(x * scaleX);
+    const pixelY = Math.floor(y * scaleY);
+
+    // Bounds check
+    if (pixelX < 0 || pixelX >= state.originalImageData.width ||
+        pixelY < 0 || pixelY >= state.originalImageData.height) {
+      return;
+    }
+
+    // Get the color at this pixel
+    const index = (pixelY * state.originalImageData.width + pixelX) * 4;
+    const r = state.originalImageData.data[index];
+    const g = state.originalImageData.data[index + 1];
+    const b = state.originalImageData.data[index + 2];
+
+    // Set the background color
+    state.bgColor = { r, g, b };
+
+    // Update UI
+    const hexColor = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+    elements.bgColorPreview.style.backgroundColor = hexColor;
+    elements.bgColorPreview.classList.add('has-color');
+
+    // Deactivate eyedropper after picking
+    state.eyedropperActive = false;
+    elements.eyedropperBtn.classList.remove('active');
+    elements.imagePreview.classList.remove('eyedropper-mode');
+
+    // Reprocess image if background removal is enabled
+    if (state.bgRemoveEnabled) {
+      processImage();
+    }
+  });
+
+  // Background tolerance slider
+  elements.bgToleranceSlider.addEventListener('input', () => {
+    state.bgTolerance = parseInt(elements.bgToleranceSlider.value) || 10;
+    elements.bgToleranceValue.textContent = state.bgTolerance.toString();
+  });
+
+  elements.bgToleranceSlider.addEventListener('change', () => {
+    if (state.originalImageData && state.bgRemoveEnabled && state.bgColor) {
+      processImage();
+    }
   });
 
   // Unit toggle

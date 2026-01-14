@@ -621,6 +621,91 @@ input[type="color"]::-moz-color-swatch {
   display: none;
 }
 
+/* Background Removal Options */
+.bg-remove-options {
+  display: none;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.bg-remove-options.visible {
+  display: block;
+}
+
+.bg-color-picker {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.bg-color-preview {
+  flex: 1;
+  height: 40px;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.bg-color-preview.has-color {
+  border-width: 2px;
+}
+
+.bg-color-hint {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.bg-color-preview.has-color .bg-color-hint {
+  display: none;
+}
+
+.eyedropper-btn {
+  width: 40px;
+  height: 40px;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.eyedropper-btn:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.eyedropper-btn.active {
+  background-color: var(--accent);
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+/* Eyedropper cursor mode for image preview */
+.image-preview.eyedropper-mode img {
+  cursor: crosshair;
+}
+
+.image-preview.eyedropper-mode {
+  position: relative;
+}
+
+.eyedropper-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  cursor: crosshair;
+  border-radius: 8px;
+}
+
 /* Status Messages */
 .status-message {
   padding: 0.75rem 1rem;

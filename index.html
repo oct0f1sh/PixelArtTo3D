@@ -49,6 +49,67 @@
             </div>
           </article>
 
+          <!-- Background Removal Panel -->
+          <article class="panel" id="background-panel">
+            <header class="panel-header">
+              <h2>Background Removal</h2>
+            </header>
+
+            <div class="control-group">
+              <label class="checkbox-group">
+                <input
+                  type="checkbox"
+                  id="bg-remove-toggle"
+                  class="checkbox-input"
+                />
+                <span class="checkbox-label">Remove background color</span>
+              </label>
+            </div>
+
+            <div class="bg-remove-options" id="bg-remove-options">
+              <div class="control-group">
+                <label class="control-label">Background Color</label>
+                <div class="bg-color-picker">
+                  <div class="bg-color-preview" id="bg-color-preview">
+                    <span class="bg-color-hint">Click eyedropper, then click on image</span>
+                  </div>
+                  <button type="button" class="eyedropper-btn" id="eyedropper-btn" title="Pick color from image">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M2 22l1-1h3l9-9"/>
+                      <path d="M3 21v-3l9-9"/>
+                      <path d="M14.5 5.5l4 4"/>
+                      <path d="M18.5 9.5l-4-4 1.5-1.5a2.83 2.83 0 114 4L18.5 9.5z"/>
+                    </svg>
+                  </button>
+                </div>
+                <p class="control-hint">
+                  Select the background color to remove from edges only
+                </p>
+              </div>
+
+              <div class="control-group">
+                <label class="control-label" for="bg-tolerance-slider">
+                  Color Tolerance
+                </label>
+                <div class="range-container">
+                  <input
+                    type="range"
+                    id="bg-tolerance-slider"
+                    class="range-slider"
+                    min="0"
+                    max="50"
+                    value="10"
+                    step="1"
+                  />
+                  <span class="range-value" id="bg-tolerance-value">10</span>
+                </div>
+                <p class="control-hint">
+                  Higher values remove more similar colors
+                </p>
+              </div>
+            </div>
+          </article>
+
           <!-- Physical Dimensions Panel -->
           <article class="panel" id="dimensions-panel">
             <header class="panel-header">

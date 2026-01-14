@@ -4,7 +4,8 @@
       "Bash(npm run build:*)",
       "Bash(npm test:*)",
       "Bash(npx tsx:*)",
-      "Bash(npx vitest run)"
+      "Bash(npx vitest run)",
+      "Bash(node:*)"
     ]
   }
 }
