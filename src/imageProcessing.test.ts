@@ -507,6 +507,83 @@ describe('Combined Background Removal and Downscaling', () => {
   });
 });
 
+describe('Queen.png Processing Tests', () => {
+  const TEST_IMAGE = 'queen.png';
+
+  it('should load queen.png and detect it as native resolution', async () => {
+    const imagePath = path.resolve(process.cwd(), TEST_IMAGE);
+    if (!fs.existsSync(imagePath)) {
+      console.warn(`Test image ${TEST_IMAGE} not found, skipping`);
+      return;
+    }
+
+    const imageData = await loadImageData(imagePath);
+    console.log(`\n${TEST_IMAGE} dimensions: ${imageData.width}x${imageData.height}`);
+
+    const { scaleX, scaleY, offsetX, offsetY } = detectPixelScaleAndOffset(imageData);
+    console.log(`  Detected scale: ${scaleX}x${scaleY}, offset: (${offsetX}, ${offsetY})`);
+
+    const outWidth = Math.floor((imageData.width - offsetX) / scaleX);
+    const outHeight = Math.floor((imageData.height - offsetY) / scaleY);
+    console.log(`  Output dimensions: ${outWidth}x${outHeight}`);
+
+    // queen.png is native pixel art - scale should be 1 or very low
+    // If scale is detected as high, the image will be too downsampled
+    expect(scaleX).toBeLessThanOrEqual(2);
+    expect(scaleY).toBeLessThanOrEqual(2);
+  });
+
+  it('should preserve queen.png dimensions (not downsample native pixel art)', async () => {
+    const imagePath = path.resolve(process.cwd(), TEST_IMAGE);
+    if (!fs.existsSync(imagePath)) return;
+
+    const imageData = await loadImageData(imagePath);
+    const { scaleX, scaleY, offsetX, offsetY } = detectPixelScaleAndOffset(imageData);
+
+    const outWidth = Math.floor((imageData.width - offsetX) / scaleX);
+    const outHeight = Math.floor((imageData.height - offsetY) / scaleY);
+
+    console.log(`\n${TEST_IMAGE} dimension preservation:`);
+    console.log(`  Input: ${imageData.width}x${imageData.height}`);
+    console.log(`  Output: ${outWidth}x${outHeight}`);
+    console.log(`  Ratio: ${(outWidth / imageData.width * 100).toFixed(1)}% x ${(outHeight / imageData.height * 100).toFixed(1)}%`);
+
+    // Output should be at least 80% of input dimensions for native pixel art
+    expect(outWidth).toBeGreaterThanOrEqual(imageData.width * 0.8);
+    expect(outHeight).toBeGreaterThanOrEqual(imageData.height * 0.8);
+  });
+
+  it('should preserve color count for queen.png', async () => {
+    const imagePath = path.resolve(process.cwd(), TEST_IMAGE);
+    if (!fs.existsSync(imagePath)) return;
+
+    const imageData = await loadImageData(imagePath);
+
+    // Count unique colors in original
+    const originalColors = new Set<string>();
+    for (let i = 0; i < imageData.width * imageData.height; i++) {
+      const r = imageData.data[i * 4];
+      const g = imageData.data[i * 4 + 1];
+      const b = imageData.data[i * 4 + 2];
+      const a = imageData.data[i * 4 + 3];
+      if (a > 128) {
+        originalColors.add(`${r},${g},${b}`);
+      }
+    }
+
+    console.log(`\n${TEST_IMAGE} color analysis:`);
+    console.log(`  Original unique colors: ${originalColors.size}`);
+
+    // Quantize and check palette
+    const quantized = quantizeColors(imageData);
+    console.log(`  Quantized palette size: ${quantized.palette.length}`);
+    console.log(`  Palette: ${quantized.palette.map(c => c.hex).join(', ')}`);
+
+    // For native pixel art, palette should closely match original color count
+    expect(quantized.palette.length).toBe(originalColors.size);
+  });
+});
+
 describe('Pixel Art Scale and Color Accuracy Tests', () => {
   const TEST_IMAGE = 'ral2.jpg';
 

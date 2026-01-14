@@ -40,7 +40,20 @@ export interface PixelScaleResult {
 export function detectPixelScaleAndOffset(imageData: ImageData): PixelScaleResult {
   const { data, width, height } = imageData;
 
-  // Test a range of candidate scales
+  // For small images (likely native pixel art), return scale=1
+  // Native pixel art is typically under 256x256
+  if (width <= 256 && height <= 256) {
+    console.log(`Small image (${width}x${height}) - assuming native pixel art, scale=1`);
+    return {
+      scale: 1,
+      scaleX: 1,
+      scaleY: 1,
+      offsetX: 0,
+      offsetY: 0,
+    };
+  }
+
+  // Test a range of candidate scales for larger (upscaled) images
   const minScale = 10;
   const maxScale = Math.min(30, Math.floor(Math.min(width, height) / 20));
 

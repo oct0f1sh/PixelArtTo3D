@@ -379,8 +379,10 @@ async function generateAndDisplay3D(): Promise<void> {
     }
 
     state.previewController = initPreview(elements.previewContainer);
-    elements.canvasPlaceholder.style.display = 'none';
   }
+
+  // Always hide placeholder when showing 3D preview
+  elements.canvasPlaceholder.style.display = 'none';
 
   // Create Three.js meshes from the result
   const meshes: THREE.Mesh[] = [];
