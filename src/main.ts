@@ -212,18 +212,19 @@ async function processImage(): Promise<void> {
   if (!state.originalImageData) return;
 
   // Detect optimal dimensions (handles upscaled pixel art and large images)
-  const { targetWidth, targetHeight, detectedScale, offsetX, offsetY } = getOptimalDimensions(state.originalImageData);
+  // Supports non-uniform scaling where X and Y may have different scale factors
+  const { targetWidth, targetHeight, scaleX, scaleY, offsetX, offsetY } = getOptimalDimensions(state.originalImageData);
 
   let imageDataToProcess = state.originalImageData;
   const { width, height } = imageDataToProcess;
 
   // Downscale if needed
   if (targetWidth < width || targetHeight < height) {
-    if (detectedScale > 1) {
-      // Use pixel-art-aware resizing with grid offset for proper alignment
-      imageDataToProcess = resizePixelArt(imageDataToProcess, detectedScale, offsetX, offsetY);
+    if (scaleX > 1 || scaleY > 1) {
+      // Use pixel-art-aware resizing with grid offset and separate X/Y scales
+      imageDataToProcess = resizePixelArt(imageDataToProcess, scaleX, scaleY, offsetX, offsetY);
       console.log(`Pixel art downscaled: ${width}x${height} -> ${imageDataToProcess.width}x${imageDataToProcess.height}` +
-        ` (detected ${detectedScale}x scale, offset ${offsetX},${offsetY})`);
+        ` (detected scaleX=${scaleX}, scaleY=${scaleY}, offset ${offsetX},${offsetY})`);
     } else {
       // Use standard resizing for non-pixel-art images
       const maxTargetDim = Math.max(targetWidth, targetHeight);
@@ -350,6 +351,11 @@ async function generateAndDisplay3D(): Promise<void> {
   }
 
   const pixelSizeMm = totalWidthMm / pixelWidth;
+
+  // Debug: log dimensions
+  console.log(`3D Generation: pixelWidth=${pixelWidth}, pixelHeight=${pixelHeight}, pixelSize=${pixelSizeMm.toFixed(3)}mm`);
+  console.log(`  Mesh dimensions: X=${(pixelWidth * pixelSizeMm).toFixed(2)}mm, Z=${(pixelHeight * pixelSizeMm).toFixed(2)}mm`);
+  console.log(`  Aspect ratio: ${(pixelWidth / pixelHeight).toFixed(4)}`);
 
   // Generate meshes (pass 0 for baseHeight if base is disabled)
   state.meshResult = generateMeshes({

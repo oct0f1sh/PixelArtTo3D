@@ -19,379 +19,178 @@ const TRANSPARENCY_THRESHOLD = 128;
 const MAX_PIXEL_DIMENSION = 256;
 
 /**
- * Result of pixel scale detection including grid offset
+ * Result of pixel scale detection including grid offset.
+ * Supports non-uniform scaling where X and Y may have different scale factors.
  */
 export interface PixelScaleResult {
-  scale: number;
+  scale: number;    // Legacy: use scaleX for backward compatibility
+  scaleX: number;   // Scale factor for X axis (horizontal)
+  scaleY: number;   // Scale factor for Y axis (vertical)
   offsetX: number;
   offsetY: number;
 }
 
 /**
  * Detects the scale factor and grid offset of upscaled pixel art.
- * Uses interior block uniformity to handle JPEG compression artifacts.
- * JPEG artifacts concentrate at edges, so we sample from block interiors.
+ * Uses block variance minimization - the correct scale has uniform blocks.
  *
  * @param imageData - The image to analyze
- * @returns The detected scale factor and grid offset
+ * @returns The detected scale factors and grid offsets
  */
 export function detectPixelScaleAndOffset(imageData: ImageData): PixelScaleResult {
   const { data, width, height } = imageData;
 
+  // Test a range of candidate scales
+  const minScale = 10;
+  const maxScale = Math.min(30, Math.floor(Math.min(width, height) / 20));
+
   /**
-   * Measures the uniformity of block interiors for a given scale and offset.
-   * Higher uniformity (lower variance) indicates correct alignment.
-   * Only samples the inner portion of each block to avoid JPEG edge artifacts.
+   * Check if a pixel is part of the background (near-white)
    */
-  const measureInteriorUniformity = (scale: number, offX: number, offY: number): number => {
-    // Interior margin: skip outer 25% on each side to avoid JPEG edge artifacts
-    const margin = Math.max(1, Math.floor(scale * 0.25));
-    const innerSize = scale - 2 * margin;
+  const isBackground = (idx: number): boolean => {
+    return data[idx] > 230 && data[idx + 1] > 230 && data[idx + 2] > 230;
+  };
 
-    if (innerSize < 2) {
-      // Scale too small for interior sampling, fall back to center sampling
-      return measureCenterUniformity(scale, offX, offY);
-    }
-
+  /**
+   * Measures block uniformity for a given scale and offset.
+   * For correctly aligned pixel art, block interiors should have low variance.
+   * Returns average variance across all non-background blocks.
+   */
+  const measureBlockVariance = (
+    scale: number,
+    offsetX: number,
+    offsetY: number
+  ): number => {
     let totalVariance = 0;
     let blockCount = 0;
 
-    // Sample a grid of blocks ACROSS THE WHOLE IMAGE (not just top-left)
-    const totalBlocksX = Math.floor((width - offX) / scale);
-    const totalBlocksY = Math.floor((height - offY) / scale);
-    const sampleCount = 15; // Sample ~15x15 blocks spread across image
-    const stepX = Math.max(1, Math.floor(totalBlocksX / sampleCount));
-    const stepY = Math.max(1, Math.floor(totalBlocksY / sampleCount));
+    // Margin to avoid JPEG edge artifacts within each block
+    const margin = Math.max(2, Math.floor(scale * 0.15));
 
-    for (let by = 0; by < totalBlocksY; by += stepY) {
-      for (let bx = 0; bx < totalBlocksX; bx += stepX) {
-        const blockX = offX + bx * scale;
-        const blockY = offY + by * scale;
+    const blocksX = Math.floor((width - offsetX) / scale);
+    const blocksY = Math.floor((height - offsetY) / scale);
 
-        if (blockX + scale > width || blockY + scale > height) continue;
+    // Sample blocks from the content area (not edges)
+    const startBx = Math.floor(blocksX * 0.1);
+    const endBx = Math.floor(blocksX * 0.9);
+    const startBy = Math.floor(blocksY * 0.1);
+    const endBy = Math.floor(blocksY * 0.9);
 
-        // Sample only interior pixels (avoiding edges where JPEG artifacts are worst)
+    for (let by = startBy; by < endBy; by++) {
+      for (let bx = startBx; bx < endBx; bx++) {
+        const blockStartX = offsetX + bx * scale;
+        const blockStartY = offsetY + by * scale;
+
+        // Check if block center is background
+        const centerX = blockStartX + Math.floor(scale / 2);
+        const centerY = blockStartY + Math.floor(scale / 2);
+        const centerIdx = (centerY * width + centerX) * 4;
+        if (isBackground(centerIdx)) continue;
+
         let sumR = 0, sumG = 0, sumB = 0;
         let sumR2 = 0, sumG2 = 0, sumB2 = 0;
-        let pixelCount = 0;
+        let n = 0;
 
+        // Sample the interior of this block (avoid edges where JPEG artifacts occur)
         for (let py = margin; py < scale - margin; py++) {
           for (let px = margin; px < scale - margin; px++) {
-            const idx = ((blockY + py) * width + (blockX + px)) * 4;
+            const x = blockStartX + px;
+            const y = blockStartY + py;
+            if (x >= width || y >= height) continue;
+
+            const idx = (y * width + x) * 4;
+            if (isBackground(idx)) continue;
+
             const r = data[idx], g = data[idx + 1], b = data[idx + 2];
             sumR += r; sumG += g; sumB += b;
             sumR2 += r * r; sumG2 += g * g; sumB2 += b * b;
-            pixelCount++;
+            n++;
           }
         }
 
-        if (pixelCount > 0) {
-          const meanR = sumR / pixelCount;
-          const meanG = sumG / pixelCount;
-          const meanB = sumB / pixelCount;
-
-          // Skip background blocks (near-white) - they have zero variance at any scale
-          // and would dominate the uniformity calculation
-          if (meanR > 230 && meanG > 230 && meanB > 230) {
-            continue;
-          }
-
-          // Variance = E[X^2] - E[X]^2
-          const varR = (sumR2 / pixelCount) - meanR * meanR;
-          const varG = (sumG2 / pixelCount) - meanG * meanG;
-          const varB = (sumB2 / pixelCount) - meanB * meanB;
+        if (n >= 4) {
+          const meanR = sumR / n, meanG = sumG / n, meanB = sumB / n;
+          const varR = sumR2 / n - meanR * meanR;
+          const varG = sumG2 / n - meanG * meanG;
+          const varB = sumB2 / n - meanB * meanB;
           totalVariance += varR + varG + varB;
           blockCount++;
         }
       }
     }
 
-    // Return uniformity score (higher = more uniform = lower variance)
-    if (blockCount === 0) return 0;
-    const avgVariance = totalVariance / blockCount;
-    return 1.0 / (1.0 + avgVariance);
+    return blockCount > 0 ? totalVariance / blockCount : Infinity;
   };
 
   /**
-   * Fallback for small scales: measure uniformity using center region only
+   * Find the scale with minimum block variance.
+   * This is the scale where blocks are most uniform (correct alignment).
    */
-  const measureCenterUniformity = (scale: number, offX: number, offY: number): number => {
-    let totalVariance = 0;
-    let blockCount = 0;
+  let bestScale = minScale;
+  let bestVariance = Infinity;
+  let bestOffsetX = 0;
+  let bestOffsetY = 0;
 
-    // Sample across the whole image
-    const totalBlocksX = Math.floor((width - offX) / scale);
-    const totalBlocksY = Math.floor((height - offY) / scale);
-    const sampleCount = 15;
-    const stepX = Math.max(1, Math.floor(totalBlocksX / sampleCount));
-    const stepY = Math.max(1, Math.floor(totalBlocksY / sampleCount));
-
-    // Sample 3x3 around center
-    const centerOffset = Math.floor(scale / 2);
-
-    for (let by = 0; by < totalBlocksY; by += stepY) {
-      for (let bx = 0; bx < totalBlocksX; bx += stepX) {
-        const blockX = offX + bx * scale;
-        const blockY = offY + by * scale;
-
-        if (blockX + scale > width || blockY + scale > height) continue;
-
-        let sumR = 0, sumG = 0, sumB = 0;
-        let sumR2 = 0, sumG2 = 0, sumB2 = 0;
-        let pixelCount = 0;
-
-        for (let dy = -1; dy <= 1; dy++) {
-          for (let dx = -1; dx <= 1; dx++) {
-            const px = blockX + centerOffset + dx;
-            const py = blockY + centerOffset + dy;
-            if (px >= 0 && px < width && py >= 0 && py < height) {
-              const idx = (py * width + px) * 4;
-              const r = data[idx], g = data[idx + 1], b = data[idx + 2];
-              sumR += r; sumG += g; sumB += b;
-              sumR2 += r * r; sumG2 += g * g; sumB2 += b * b;
-              pixelCount++;
-            }
-          }
-        }
-
-        if (pixelCount > 0) {
-          const meanR = sumR / pixelCount;
-          const meanG = sumG / pixelCount;
-          const meanB = sumB / pixelCount;
-
-          // Skip background blocks (near-white)
-          if (meanR > 230 && meanG > 230 && meanB > 230) {
-            continue;
-          }
-
-          const varR = (sumR2 / pixelCount) - meanR * meanR;
-          const varG = (sumG2 / pixelCount) - meanG * meanG;
-          const varB = (sumB2 / pixelCount) - meanB * meanB;
-          totalVariance += varR + varG + varB;
-          blockCount++;
-        }
-      }
-    }
-
-    if (blockCount === 0) return 0;
-    const avgVariance = totalVariance / blockCount;
-    return 1.0 / (1.0 + avgVariance);
-  };
-
-  // Test a range of candidate scales
-  const minScale = 4;
-  const maxScale = Math.min(40, Math.floor(Math.min(width, height) / 8));
-
-  /**
-   * Find significant color transitions (edges) along a line.
-   * Returns positions where color changes significantly.
-   */
-  const findEdges = (
-    isHorizontal: boolean,
-    linePos: number,
-    threshold: number = 80
-  ): number[] => {
-    const edges: number[] = [];
-    const maxPos = isHorizontal ? width : height;
-
-    for (let pos = 1; pos < maxPos; pos++) {
-      const idx1 = isHorizontal
-        ? (linePos * width + pos - 1) * 4
-        : ((pos - 1) * width + linePos) * 4;
-      const idx2 = isHorizontal
-        ? (linePos * width + pos) * 4
-        : (pos * width + linePos) * 4;
-
-      const diff =
-        Math.abs(data[idx1] - data[idx2]) +
-        Math.abs(data[idx1 + 1] - data[idx2 + 1]) +
-        Math.abs(data[idx1 + 2] - data[idx2 + 2]);
-
-      if (diff > threshold) {
-        edges.push(pos);
-      }
-    }
-    return edges;
-  };
-
-  /**
-   * Measures how well edges align with a given scale and offset.
-   * The correct scale should have edge distances that are multiples of the scale.
-   */
-  const measureEdgeAlignment = (
-    scale: number,
-    offset: number,
-    edges: number[]
-  ): { score: number; avgError: number } => {
-    if (edges.length < 2) return { score: 0, avgError: Infinity };
-
-    // Calculate distances between significant edges
-    // Cluster edges that are within 3px of each other (JPEG artifact clusters)
-    const clusteredEdges: number[] = [];
-    let clusterStart = edges[0];
-    for (let i = 1; i < edges.length; i++) {
-      if (edges[i] - edges[i - 1] > 3) {
-        // End current cluster, start new one
-        clusteredEdges.push(Math.round((clusterStart + edges[i - 1]) / 2));
-        clusterStart = edges[i];
-      }
-    }
-    clusteredEdges.push(Math.round((clusterStart + edges[edges.length - 1]) / 2));
-
-    // Calculate distances between clustered edges
-    const distances: number[] = [];
-    for (let i = 1; i < clusteredEdges.length; i++) {
-      const dist = clusteredEdges[i] - clusteredEdges[i - 1];
-      if (dist >= scale - 2) {
-        // Ignore very short distances
-        distances.push(dist);
-      }
-    }
-
-    if (distances.length === 0) return { score: 0, avgError: Infinity };
-
-    // For each distance, check how close it is to a multiple of scale
-    let totalError = 0;
-    let goodDivisions = 0;
-
-    for (const d of distances) {
-      const nearestMultiple = Math.round(d / scale) * scale;
-      const error = Math.abs(d - nearestMultiple);
-
-      if (error <= 2) {
-        // Within 2px tolerance
-        goodDivisions++;
-      }
-      totalError += error;
-    }
-
-    const avgError = totalError / distances.length;
-    const score = goodDivisions / distances.length;
-
-    return { score, avgError };
-  };
-
-  // Sample multiple lines to get edge positions
-  const sampleLines = 5;
-  const hEdges: number[][] = [];
-  const vEdges: number[][] = [];
-
-  for (let i = 0; i < sampleLines; i++) {
-    const hLine = Math.floor((height * (i + 1)) / (sampleLines + 1));
-    const vLine = Math.floor((width * (i + 1)) / (sampleLines + 1));
-    hEdges.push(findEdges(true, hLine));
-    vEdges.push(findEdges(false, vLine));
-  }
-
-  // Phase 1: Find best scale using edge alignment
-  const scaleResults: Array<{
-    scale: number;
-    score: number;
-    avgError: number;
-    offsetX: number;
-    offsetY: number;
-  }> = [];
+  console.log(`Searching scales ${minScale}-${maxScale}...`);
 
   for (let scale = minScale; scale <= maxScale; scale++) {
-    // Check if output dimensions are reasonable for pixel art
-    const resultMax = Math.max(
-      Math.floor(width / scale),
-      Math.floor(height / scale)
-    );
-    const resultMin = Math.min(
-      Math.floor(width / scale),
-      Math.floor(height / scale)
-    );
+    // For each scale, search for best offset
+    let bestVarForScale = Infinity;
+    let bestOxForScale = 0;
+    let bestOyForScale = 0;
 
-    // Skip if output is too large (not typical pixel art) or too small
-    if (resultMax > 150 || resultMin < 32) {
-      continue;
-    }
-
-    // Test edge alignment for this scale across all sampled lines
-    let totalScore = 0;
-    let totalError = 0;
-    let lineCount = 0;
-
-    for (const edges of [...hEdges, ...vEdges]) {
-      const { score, avgError } = measureEdgeAlignment(scale, 0, edges);
-      if (avgError < Infinity) {
-        totalScore += score;
-        totalError += avgError;
-        lineCount++;
-      }
-    }
-
-    if (lineCount === 0) continue;
-
-    const avgScore = totalScore / lineCount;
-    const avgError = totalError / lineCount;
-
-    // Find best offset using uniformity metric
-    let bestUniformity = 0;
-    let bestOffX = 0;
-    let bestOffY = 0;
-
-    const step = scale > 10 ? 2 : 1;
-    for (let offY = 0; offY < scale; offY += step) {
-      for (let offX = 0; offX < scale; offX += step) {
-        const uniformity = measureInteriorUniformity(scale, offX, offY);
-        if (uniformity > bestUniformity) {
-          bestUniformity = uniformity;
-          bestOffX = offX;
-          bestOffY = offY;
+    // Coarse search first
+    const step = Math.max(1, Math.floor(scale / 4));
+    for (let ox = 0; ox < scale; ox += step) {
+      for (let oy = 0; oy < scale; oy += step) {
+        const variance = measureBlockVariance(scale, ox, oy);
+        if (variance < bestVarForScale) {
+          bestVarForScale = variance;
+          bestOxForScale = ox;
+          bestOyForScale = oy;
         }
       }
     }
 
-    // Fine search around best coarse result
-    if (step > 1) {
-      for (
-        let offY = Math.max(0, bestOffY - 1);
-        offY <= Math.min(scale - 1, bestOffY + 1);
-        offY++
-      ) {
-        for (
-          let offX = Math.max(0, bestOffX - 1);
-          offX <= Math.min(scale - 1, bestOffX + 1);
-          offX++
-        ) {
-          const uniformity = measureInteriorUniformity(scale, offX, offY);
-          if (uniformity > bestUniformity) {
-            bestUniformity = uniformity;
-            bestOffX = offX;
-            bestOffY = offY;
-          }
+    // Fine-tune around best coarse offset
+    for (let ox = Math.max(0, bestOxForScale - step); ox <= Math.min(scale - 1, bestOxForScale + step); ox++) {
+      for (let oy = Math.max(0, bestOyForScale - step); oy <= Math.min(scale - 1, bestOyForScale + step); oy++) {
+        const variance = measureBlockVariance(scale, ox, oy);
+        if (variance < bestVarForScale) {
+          bestVarForScale = variance;
+          bestOxForScale = ox;
+          bestOyForScale = oy;
         }
       }
     }
 
-    scaleResults.push({
-      scale,
-      score: avgScore,
-      avgError,
-      offsetX: bestOffX,
-      offsetY: bestOffY,
-    });
-  }
+    console.log(`  Scale ${scale}: variance=${bestVarForScale.toFixed(1)}, offset=(${bestOxForScale}, ${bestOyForScale})`);
 
-  // Sort by edge alignment score (highest first), then by error (lowest first)
-  scaleResults.sort((a, b) => {
-    // Primary: higher score is better
-    if (Math.abs(a.score - b.score) > 0.1) {
-      return b.score - a.score;
+    if (bestVarForScale < bestVariance) {
+      bestVariance = bestVarForScale;
+      bestScale = scale;
+      bestOffsetX = bestOxForScale;
+      bestOffsetY = bestOyForScale;
     }
-    // Secondary: lower error is better
-    return a.avgError - b.avgError;
-  });
-
-  if (scaleResults.length === 0) {
-    return { scale: 1, offsetX: 0, offsetY: 0 };
   }
 
-  // Return the scale with best edge alignment and its optimal offset
-  const best = scaleResults[0];
-  return { scale: best.scale, offsetX: best.offsetX, offsetY: best.offsetY };
+  console.log(`Best: scale=${bestScale}, variance=${bestVariance.toFixed(1)}, offset=(${bestOffsetX}, ${bestOffsetY})`);
+
+  // Use uniform scale (same for X and Y)
+  const scaleX = bestScale;
+  const scaleY = bestScale;
+
+  // Log detection results
+  console.log(`Scale detection: scale=${bestScale}, offset=(${bestOffsetX}, ${bestOffsetY})`);
+  console.log(`  Output dimensions: ${Math.floor((width - bestOffsetX) / scaleX)}x${Math.floor((height - bestOffsetY) / scaleY)}`);
+
+  return {
+    scale: bestScale,
+    scaleX,
+    scaleY,
+    offsetX: bestOffsetX,
+    offsetY: bestOffsetY,
+  };
 }
 
 /**
@@ -415,21 +214,23 @@ export function getOptimalDimensions(imageData: ImageData): {
   targetWidth: number;
   targetHeight: number;
   detectedScale: number;
+  scaleX: number;
+  scaleY: number;
   offsetX: number;
   offsetY: number;
 } {
   const { width, height } = imageData;
 
   // Detect if this is upscaled pixel art (including grid offset)
-  const { scale, offsetX, offsetY } = detectPixelScaleAndOffset(imageData);
+  const { scaleX, scaleY, offsetX, offsetY } = detectPixelScaleAndOffset(imageData);
 
   let targetWidth = width;
   let targetHeight = height;
 
-  if (scale > 1) {
+  if (scaleX > 1 || scaleY > 1) {
     // Downscale to native pixel art dimensions accounting for offset
-    targetWidth = Math.floor((width - offsetX) / scale);
-    targetHeight = Math.floor((height - offsetY) / scale);
+    targetWidth = Math.floor((width - offsetX) / scaleX);
+    targetHeight = Math.floor((height - offsetY) / scaleY);
 
     // Ensure minimum dimensions
     targetWidth = Math.max(8, targetWidth);
@@ -444,31 +245,49 @@ export function getOptimalDimensions(imageData: ImageData): {
     targetHeight = Math.round(targetHeight * scaleFactor);
   }
 
-  return { targetWidth, targetHeight, detectedScale: scale, offsetX, offsetY };
+  return { targetWidth, targetHeight, detectedScale: scaleX, scaleX, scaleY, offsetX, offsetY };
 }
 
 /**
- * Downscales pixel art using detected scale.
- * Uses median color from block interiors to handle JPEG artifacts.
- * JPEG artifacts concentrate at edges, so we sample from the inner region.
+ * Downscales pixel art using detected scale factors.
+ * Uses center pixel color from each block to handle JPEG artifacts.
  *
  * @param imageData - The source image
- * @param scale - The detected scale factor
- * @param offsetX - The x offset of the pixel grid
- * @param offsetY - The y offset of the pixel grid
+ * @param scaleX - The detected scale factor for X axis
+ * @param scaleYOrOffsetX - Either scaleY (new) or offsetX (old signature)
+ * @param offsetXOrOffsetY - Either offsetX (new) or offsetY (old signature)
+ * @param offsetY - offsetY for new signature
  * @returns Downscaled ImageData
  */
 export function resizePixelArt(
   imageData: ImageData,
-  scale: number,
-  offsetX: number,
-  offsetY: number
+  scaleX: number,
+  scaleYOrOffsetX: number,
+  offsetXOrOffsetY?: number,
+  offsetY?: number
 ): ImageData {
+  // Handle both old (scale, offsetX, offsetY) and new (scaleX, scaleY, offsetX, offsetY) signatures
+  let scaleY: number;
+  let offX: number;
+  let offY: number;
+
+  if (offsetY !== undefined) {
+    // New signature: resizePixelArt(imageData, scaleX, scaleY, offsetX, offsetY)
+    scaleY = scaleYOrOffsetX;
+    offX = offsetXOrOffsetY!;
+    offY = offsetY;
+  } else {
+    // Old signature: resizePixelArt(imageData, scale, offsetX, offsetY)
+    scaleY = scaleX;
+    offX = scaleYOrOffsetX;
+    offY = offsetXOrOffsetY!;
+  }
+
   const { data, width, height } = imageData;
 
   // Calculate output dimensions
-  const outWidth = Math.floor((width - offsetX) / scale);
-  const outHeight = Math.floor((height - offsetY) / scale);
+  const outWidth = Math.floor((width - offX) / scaleX);
+  const outHeight = Math.floor((height - offY) / scaleY);
 
   // Create output canvas
   const canvas = document.createElement('canvas');
@@ -481,60 +300,21 @@ export function resizePixelArt(
 
   const outData = ctx.createImageData(outWidth, outHeight);
 
-  // Interior margin: skip outer portion to avoid JPEG edge artifacts
-  const margin = Math.max(1, Math.floor(scale * 0.2));
-
   /**
-   * Extract the true color from a block using median of interior samples.
-   * Median is robust to outliers (JPEG artifacts).
+   * Extract the color from a block using the center pixel.
    */
   const extractBlockColor = (blockX: number, blockY: number): [number, number, number, number] => {
-    const rValues: number[] = [];
-    const gValues: number[] = [];
-    const bValues: number[] = [];
-    const aValues: number[] = [];
-
-    // Determine sampling region (interior only for larger scales)
-    const startX = blockX + (scale >= 6 ? margin : 0);
-    const startY = blockY + (scale >= 6 ? margin : 0);
-    const endX = blockX + scale - (scale >= 6 ? margin : 0);
-    const endY = blockY + scale - (scale >= 6 ? margin : 0);
-
-    for (let py = startY; py < endY; py++) {
-      for (let px = startX; px < endX; px++) {
-        if (px >= 0 && px < width && py >= 0 && py < height) {
-          const idx = (py * width + px) * 4;
-          rValues.push(data[idx]);
-          gValues.push(data[idx + 1]);
-          bValues.push(data[idx + 2]);
-          aValues.push(data[idx + 3]);
-        }
-      }
-    }
-
-    // If we got no samples (shouldn't happen), fall back to center pixel
-    if (rValues.length === 0) {
-      const cx = Math.min(Math.max(0, blockX + Math.floor(scale / 2)), width - 1);
-      const cy = Math.min(Math.max(0, blockY + Math.floor(scale / 2)), height - 1);
-      const idx = (cy * width + cx) * 4;
-      return [data[idx], data[idx + 1], data[idx + 2], data[idx + 3]];
-    }
-
-    // Sort and take median for each channel
-    rValues.sort((a, b) => a - b);
-    gValues.sort((a, b) => a - b);
-    bValues.sort((a, b) => a - b);
-    aValues.sort((a, b) => a - b);
-
-    const mid = Math.floor(rValues.length / 2);
-    return [rValues[mid], gValues[mid], bValues[mid], aValues[mid]];
+    const cx = Math.min(Math.max(0, blockX + Math.floor(scaleX / 2)), width - 1);
+    const cy = Math.min(Math.max(0, blockY + Math.floor(scaleY / 2)), height - 1);
+    const idx = (cy * width + cx) * 4;
+    return [data[idx], data[idx + 1], data[idx + 2], data[idx + 3]];
   };
 
   // Process each output pixel
   for (let outY = 0; outY < outHeight; outY++) {
     for (let outX = 0; outX < outWidth; outX++) {
-      const blockX = offsetX + outX * scale;
-      const blockY = offsetY + outY * scale;
+      const blockX = offX + outX * scaleX;
+      const blockY = offY + outY * scaleY;
 
       const [r, g, b, a] = extractBlockColor(blockX, blockY);
 
@@ -618,7 +398,7 @@ export function removeBackground(
       return;
     }
 
-    // Stack stores [x, y, parentDirection] where parentDirection helps avoid redundant checks
+    // Stack stores [x, y]
     const stack: Array<[number, number]> = [[startX, startY]];
 
     while (stack.length > 0) {
