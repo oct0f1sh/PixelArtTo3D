@@ -52,12 +52,13 @@ export function detectPixelScaleAndOffset(imageData: ImageData): PixelScaleResul
   };
 
   /**
-   * Measures block uniformity for a given scale and offset.
+   * Measures block uniformity for given X and Y scales and offsets.
    * For correctly aligned pixel art, block interiors should have low variance.
    * Returns average variance across all non-background blocks.
    */
   const measureBlockVariance = (
-    scale: number,
+    scaleX: number,
+    scaleY: number,
     offsetX: number,
     offsetY: number
   ): number => {
@@ -65,10 +66,11 @@ export function detectPixelScaleAndOffset(imageData: ImageData): PixelScaleResul
     let blockCount = 0;
 
     // Margin to avoid JPEG edge artifacts within each block
-    const margin = Math.max(2, Math.floor(scale * 0.15));
+    const marginX = Math.max(2, Math.floor(scaleX * 0.15));
+    const marginY = Math.max(2, Math.floor(scaleY * 0.15));
 
-    const blocksX = Math.floor((width - offsetX) / scale);
-    const blocksY = Math.floor((height - offsetY) / scale);
+    const blocksX = Math.floor((width - offsetX) / scaleX);
+    const blocksY = Math.floor((height - offsetY) / scaleY);
 
     // Sample blocks from the content area (not edges)
     const startBx = Math.floor(blocksX * 0.1);
@@ -78,12 +80,12 @@ export function detectPixelScaleAndOffset(imageData: ImageData): PixelScaleResul
 
     for (let by = startBy; by < endBy; by++) {
       for (let bx = startBx; bx < endBx; bx++) {
-        const blockStartX = offsetX + bx * scale;
-        const blockStartY = offsetY + by * scale;
+        const blockStartX = offsetX + bx * scaleX;
+        const blockStartY = offsetY + by * scaleY;
 
         // Check if block center is background
-        const centerX = blockStartX + Math.floor(scale / 2);
-        const centerY = blockStartY + Math.floor(scale / 2);
+        const centerX = blockStartX + Math.floor(scaleX / 2);
+        const centerY = blockStartY + Math.floor(scaleY / 2);
         const centerIdx = (centerY * width + centerX) * 4;
         if (isBackground(centerIdx)) continue;
 
@@ -92,8 +94,8 @@ export function detectPixelScaleAndOffset(imageData: ImageData): PixelScaleResul
         let n = 0;
 
         // Sample the interior of this block (avoid edges where JPEG artifacts occur)
-        for (let py = margin; py < scale - margin; py++) {
-          for (let px = margin; px < scale - margin; px++) {
+        for (let py = marginY; py < scaleY - marginY; py++) {
+          for (let px = marginX; px < scaleX - marginX; px++) {
             const x = blockStartX + px;
             const y = blockStartY + py;
             if (x >= width || y >= height) continue;
@@ -124,7 +126,7 @@ export function detectPixelScaleAndOffset(imageData: ImageData): PixelScaleResul
 
   /**
    * Find the scale with minimum block variance.
-   * This is the scale where blocks are most uniform (correct alignment).
+   * Uses integer scaling for consistent pixel art alignment.
    */
   let bestScale = minScale;
   let bestVariance = Infinity;
@@ -143,7 +145,7 @@ export function detectPixelScaleAndOffset(imageData: ImageData): PixelScaleResul
     const step = Math.max(1, Math.floor(scale / 4));
     for (let ox = 0; ox < scale; ox += step) {
       for (let oy = 0; oy < scale; oy += step) {
-        const variance = measureBlockVariance(scale, ox, oy);
+        const variance = measureBlockVariance(scale, scale, ox, oy);
         if (variance < bestVarForScale) {
           bestVarForScale = variance;
           bestOxForScale = ox;
@@ -155,7 +157,7 @@ export function detectPixelScaleAndOffset(imageData: ImageData): PixelScaleResul
     // Fine-tune around best coarse offset
     for (let ox = Math.max(0, bestOxForScale - step); ox <= Math.min(scale - 1, bestOxForScale + step); ox++) {
       for (let oy = Math.max(0, bestOyForScale - step); oy <= Math.min(scale - 1, bestOyForScale + step); oy++) {
-        const variance = measureBlockVariance(scale, ox, oy);
+        const variance = measureBlockVariance(scale, scale, ox, oy);
         if (variance < bestVarForScale) {
           bestVarForScale = variance;
           bestOxForScale = ox;
@@ -176,7 +178,6 @@ export function detectPixelScaleAndOffset(imageData: ImageData): PixelScaleResul
 
   console.log(`Best: scale=${bestScale}, variance=${bestVariance.toFixed(1)}, offset=(${bestOffsetX}, ${bestOffsetY})`);
 
-  // Use uniform scale (same for X and Y)
   const scaleX = bestScale;
   const scaleY = bestScale;
 
@@ -301,13 +302,67 @@ export function resizePixelArt(
   const outData = ctx.createImageData(outWidth, outHeight);
 
   /**
-   * Extract the color from a block using the center pixel.
+   * Extract the color from a block using mode-based sampling.
+   * Samples multiple points in the block interior and returns the most common color.
+   * This avoids JPEG artifacts which create spurious intermediate colors.
    */
   const extractBlockColor = (blockX: number, blockY: number): [number, number, number, number] => {
-    const cx = Math.min(Math.max(0, blockX + Math.floor(scaleX / 2)), width - 1);
-    const cy = Math.min(Math.max(0, blockY + Math.floor(scaleY / 2)), height - 1);
-    const idx = (cy * width + cx) * 4;
-    return [data[idx], data[idx + 1], data[idx + 2], data[idx + 3]];
+    // Sample a grid of points within the block (avoiding edges where JPEG artifacts occur)
+    const margin = Math.max(1, Math.floor(Math.min(scaleX, scaleY) * 0.15));
+    const samples: Array<[number, number, number, number]> = [];
+
+    // Sample interior points
+    const sampleStep = Math.max(1, Math.floor(Math.min(scaleX, scaleY) / 4));
+    for (let dy = margin; dy < scaleY - margin; dy += sampleStep) {
+      for (let dx = margin; dx < scaleX - margin; dx += sampleStep) {
+        const x = Math.min(blockX + dx, width - 1);
+        const y = Math.min(blockY + dy, height - 1);
+        const idx = (y * width + x) * 4;
+        samples.push([data[idx], data[idx + 1], data[idx + 2], data[idx + 3]]);
+      }
+    }
+
+    // If no interior samples (small scale), fall back to center
+    if (samples.length === 0) {
+      const cx = Math.min(blockX + Math.floor(scaleX / 2), width - 1);
+      const cy = Math.min(blockY + Math.floor(scaleY / 2), height - 1);
+      const idx = (cy * width + cx) * 4;
+      return [data[idx], data[idx + 1], data[idx + 2], data[idx + 3]];
+    }
+
+    // Find the most common color (mode) by binning similar colors
+    // Group colors that are within tolerance of each other
+    const colorBins: Array<{ color: [number, number, number, number]; count: number }> = [];
+    const tolerance = 30; // Colors within this distance are considered the same
+
+    for (const sample of samples) {
+      // Find existing bin for this color
+      let foundBin = false;
+      for (const bin of colorBins) {
+        const dr = sample[0] - bin.color[0];
+        const dg = sample[1] - bin.color[1];
+        const db = sample[2] - bin.color[2];
+        const dist = Math.sqrt(dr * dr + dg * dg + db * db);
+        if (dist < tolerance) {
+          bin.count++;
+          foundBin = true;
+          break;
+        }
+      }
+      if (!foundBin) {
+        colorBins.push({ color: sample, count: 1 });
+      }
+    }
+
+    // Return the color from the most common bin
+    let bestBin = colorBins[0];
+    for (const bin of colorBins) {
+      if (bin.count > bestBin.count) {
+        bestBin = bin;
+      }
+    }
+
+    return bestBin.color;
   };
 
   // Process each output pixel

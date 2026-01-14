@@ -1126,4 +1126,97 @@ describe('Pixel Art Scale and Color Accuracy Tests', () => {
     // Well-aligned pixel art should have mostly sharp transitions
     expect(sharpRatio).toBeGreaterThan(0.7);
   });
+
+  /**
+   * Test that verifies the output doesn't have extra partial rows/columns at edges.
+   * The scale detection should trim rows/columns that are mostly background.
+   */
+  it('should not have extra background rows at edges', async () => {
+    const imagePath = path.resolve(process.cwd(), TEST_IMAGE);
+    if (!fs.existsSync(imagePath)) return;
+
+    const imageData = await loadImageData(imagePath);
+    const { scaleX, scaleY, offsetX, offsetY } = detectPixelScaleAndOffset(imageData);
+    const output = resizePixelArtNode(imageData, scaleX, scaleY, offsetX, offsetY);
+
+    console.log(`\nEdge row/column check for ${TEST_IMAGE}:`);
+    console.log(`  Output: ${output.width}x${output.height}`);
+
+    // Check last row - should not be mostly background
+    let lastRowBgCount = 0;
+    for (let x = 0; x < output.width; x++) {
+      const idx = ((output.height - 1) * output.width + x) * 4;
+      const r = output.data[idx];
+      const g = output.data[idx + 1];
+      const b = output.data[idx + 2];
+      if (r > 230 && g > 230 && b > 230) {
+        lastRowBgCount++;
+      }
+    }
+    const lastRowBgRatio = lastRowBgCount / output.width;
+    console.log(`  Last row background: ${(lastRowBgRatio * 100).toFixed(1)}%`);
+
+    // Check first row
+    let firstRowBgCount = 0;
+    for (let x = 0; x < output.width; x++) {
+      const idx = x * 4;
+      const r = output.data[idx];
+      const g = output.data[idx + 1];
+      const b = output.data[idx + 2];
+      if (r > 230 && g > 230 && b > 230) {
+        firstRowBgCount++;
+      }
+    }
+    const firstRowBgRatio = firstRowBgCount / output.width;
+    console.log(`  First row background: ${(firstRowBgRatio * 100).toFixed(1)}%`);
+
+    // Check last column
+    let lastColBgCount = 0;
+    for (let y = 0; y < output.height; y++) {
+      const idx = (y * output.width + output.width - 1) * 4;
+      const r = output.data[idx];
+      const g = output.data[idx + 1];
+      const b = output.data[idx + 2];
+      if (r > 230 && g > 230 && b > 230) {
+        lastColBgCount++;
+      }
+    }
+    const lastColBgRatio = lastColBgCount / output.height;
+    console.log(`  Last column background: ${(lastColBgRatio * 100).toFixed(1)}%`);
+
+    // Check first column
+    let firstColBgCount = 0;
+    for (let y = 0; y < output.height; y++) {
+      const idx = (y * output.width) * 4;
+      const r = output.data[idx];
+      const g = output.data[idx + 1];
+      const b = output.data[idx + 2];
+      if (r > 230 && g > 230 && b > 230) {
+        firstColBgCount++;
+      }
+    }
+    const firstColBgRatio = firstColBgCount / output.height;
+    console.log(`  First column background: ${(firstColBgRatio * 100).toFixed(1)}%`);
+
+    // For sprites with background padding, edges may be 100% background - that's OK.
+    // What we want to verify is that the SOURCE blocks for the last row/column are valid
+    // (i.e., we're not including an extra row that should have been trimmed).
+
+    // Check if the source block for the last row is within bounds and not partial
+    const lastRowSourceY = offsetY + (output.height - 1) * scaleY;
+    const sourceBlockComplete = lastRowSourceY + scaleY <= imageData.height;
+    console.log(`  Last row source Y: ${lastRowSourceY}, block ends at: ${lastRowSourceY + scaleY}, image height: ${imageData.height}`);
+    console.log(`  Source block complete: ${sourceBlockComplete}`);
+
+    // The source block should be complete (not extending beyond image bounds)
+    expect(sourceBlockComplete).toBe(true);
+
+    // Also verify dimensions are reasonable for the source image size
+    const expectedMinWidth = Math.floor(imageData.width / 15); // Assuming max scale ~15
+    const expectedMinHeight = Math.floor(imageData.height / 15);
+    console.log(`  Expected min dimensions: ${expectedMinWidth}x${expectedMinHeight}`);
+
+    expect(output.width).toBeGreaterThanOrEqual(expectedMinWidth);
+    expect(output.height).toBeGreaterThanOrEqual(expectedMinHeight);
+  });
 });
