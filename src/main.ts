@@ -9,7 +9,46 @@ import { loadImage, quantizeColors, removeBackground, resizeImage, getOptimalDim
 import { initPreview, type PreviewController } from './preview';
 import { generateMeshes, rotateForPrinting, type MeshResult } from './meshGenerator';
 import { exportSTL, export3MF } from './exporter';
-import type { QuantizedResult } from './types';
+import type { QuantizedResult, PixelGrid } from './types';
+
+/**
+ * Calculates the bounding box of non-transparent pixels in the grid.
+ * Returns the content dimensions (excluding transparent border).
+ */
+function getContentBounds(pixels: PixelGrid): { minX: number; minY: number; maxX: number; maxY: number; width: number; height: number } {
+  const height = pixels.length;
+  const width = pixels[0]?.length || 0;
+
+  let minX = width;
+  let minY = height;
+  let maxX = -1;
+  let maxY = -1;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (pixels[y][x] !== -1) {
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+      }
+    }
+  }
+
+  // If no content found, return full dimensions
+  if (maxX < 0) {
+    return { minX: 0, minY: 0, maxX: width - 1, maxY: height - 1, width, height };
+  }
+
+  return {
+    minX,
+    minY,
+    maxX,
+    maxY,
+    width: maxX - minX + 1,
+    height: maxY - minY + 1
+  };
+}
 
 // ============================================================================
 // State
@@ -301,8 +340,11 @@ function updateDimensionsDisplay(): void {
     return;
   }
 
-  const { width: pixelWidth, height: pixelHeight } = state.quantizedResult;
-  const aspectRatio = pixelWidth / pixelHeight;
+  // Use content bounds (non-transparent pixels) for dimension calculations
+  const contentBounds = getContentBounds(state.quantizedResult.pixels);
+  const contentWidth = contentBounds.width;
+  const contentHeight = contentBounds.height;
+  const aspectRatio = contentWidth / contentHeight;
 
   const inputValueMm = toMm(state.dimensionValue, state.unit);
 
@@ -337,25 +379,31 @@ function updateDimensionsDisplay(): void {
 async function generateAndDisplay3D(): Promise<void> {
   if (!state.quantizedResult) return;
 
-  const { pixels, palette, width: pixelWidth, height: pixelHeight } = state.quantizedResult;
+  const { pixels, palette } = state.quantizedResult;
 
-  // Calculate pixel size in mm
+  // Use content bounds (non-transparent pixels) for dimension calculations
+  const contentBounds = getContentBounds(pixels);
+  const contentWidth = contentBounds.width;
+  const contentHeight = contentBounds.height;
+
+  // Calculate pixel size in mm based on content dimensions
   const inputValueMm = toMm(state.dimensionValue, state.unit);
   let totalWidthMm: number;
 
   if (state.setDimension === 'width') {
     totalWidthMm = inputValueMm;
   } else {
-    const aspectRatio = pixelWidth / pixelHeight;
+    const aspectRatio = contentWidth / contentHeight;
     totalWidthMm = inputValueMm * aspectRatio;
   }
 
-  const pixelSizeMm = totalWidthMm / pixelWidth;
+  const pixelSizeMm = totalWidthMm / contentWidth;
 
   // Debug: log dimensions
-  console.log(`3D Generation: pixelWidth=${pixelWidth}, pixelHeight=${pixelHeight}, pixelSize=${pixelSizeMm.toFixed(3)}mm`);
-  console.log(`  Mesh dimensions: X=${(pixelWidth * pixelSizeMm).toFixed(2)}mm, Z=${(pixelHeight * pixelSizeMm).toFixed(2)}mm`);
-  console.log(`  Aspect ratio: ${(pixelWidth / pixelHeight).toFixed(4)}`);
+  console.log(`3D Generation: contentWidth=${contentWidth}, contentHeight=${contentHeight}, pixelSize=${pixelSizeMm.toFixed(3)}mm`);
+  console.log(`  Content bounds: (${contentBounds.minX},${contentBounds.minY}) to (${contentBounds.maxX},${contentBounds.maxY})`);
+  console.log(`  Mesh dimensions: X=${(contentWidth * pixelSizeMm).toFixed(2)}mm, Z=${(contentHeight * pixelSizeMm).toFixed(2)}mm`);
+  console.log(`  Aspect ratio: ${(contentWidth / contentHeight).toFixed(4)}`);
 
   // Generate meshes (pass 0 for baseHeight if base is disabled)
   state.meshResult = generateMeshes({
