@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite'
 
 export default defineConfig({
-  base: '/PixelArtConverter/',
+  base: '/PixelArtTo3D/',
   build: {
     outDir: 'dist'
   }
