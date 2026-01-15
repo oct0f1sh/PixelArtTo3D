@@ -32,7 +32,8 @@ export interface PixelScaleResult {
 
 /**
  * Detects the scale factor and grid offset of upscaled pixel art.
- * Uses block variance minimization - the correct scale has uniform blocks.
+ * Uses block variance minimization with multi-region sampling for accuracy.
+ * Tests both integer and fractional scales to handle non-exact upscaling.
  *
  * @param imageData - The image to analyze
  * @returns The detected scale factors and grid offsets
@@ -54,7 +55,7 @@ export function detectPixelScaleAndOffset(imageData: ImageData): PixelScaleResul
   }
 
   // Test a range of candidate scales for larger (upscaled) images
-  const minScale = 10;
+  const minScale = 8;
   const maxScale = Math.min(30, Math.floor(Math.min(width, height) / 20));
 
   /**
@@ -65,40 +66,36 @@ export function detectPixelScaleAndOffset(imageData: ImageData): PixelScaleResul
   };
 
   /**
-   * Measures block uniformity for given X and Y scales and offsets.
-   * For correctly aligned pixel art, block interiors should have low variance.
-   * Returns average variance across all non-background blocks.
+   * Measures block uniformity for given scale and offset in a specific region.
+   * Returns average variance across blocks in that region.
    */
-  const measureBlockVariance = (
+  const measureRegionVariance = (
     scaleX: number,
     scaleY: number,
     offsetX: number,
-    offsetY: number
-  ): number => {
+    offsetY: number,
+    regionStartX: number,
+    regionEndX: number,
+    regionStartY: number,
+    regionEndY: number
+  ): { variance: number; count: number } => {
     let totalVariance = 0;
     let blockCount = 0;
 
     // Margin to avoid JPEG edge artifacts within each block
-    const marginX = Math.max(2, Math.floor(scaleX * 0.15));
-    const marginY = Math.max(2, Math.floor(scaleY * 0.15));
+    const marginX = Math.max(1, Math.floor(scaleX * 0.2));
+    const marginY = Math.max(1, Math.floor(scaleY * 0.2));
 
-    const blocksX = Math.floor((width - offsetX) / scaleX);
-    const blocksY = Math.floor((height - offsetY) / scaleY);
-
-    // Sample blocks from the content area (not edges)
-    const startBx = Math.floor(blocksX * 0.1);
-    const endBx = Math.floor(blocksX * 0.9);
-    const startBy = Math.floor(blocksY * 0.1);
-    const endBy = Math.floor(blocksY * 0.9);
-
-    for (let by = startBy; by < endBy; by++) {
-      for (let bx = startBx; bx < endBx; bx++) {
+    for (let by = regionStartY; by < regionEndY; by++) {
+      for (let bx = regionStartX; bx < regionEndX; bx++) {
         const blockStartX = offsetX + bx * scaleX;
         const blockStartY = offsetY + by * scaleY;
 
+        if (blockStartX + scaleX > width || blockStartY + scaleY > height) continue;
+
         // Check if block center is background
-        const centerX = blockStartX + Math.floor(scaleX / 2);
-        const centerY = blockStartY + Math.floor(scaleY / 2);
+        const centerX = Math.floor(blockStartX + scaleX / 2);
+        const centerY = Math.floor(blockStartY + scaleY / 2);
         const centerIdx = (centerY * width + centerX) * 4;
         if (isBackground(centerIdx)) continue;
 
@@ -106,11 +103,11 @@ export function detectPixelScaleAndOffset(imageData: ImageData): PixelScaleResul
         let sumR2 = 0, sumG2 = 0, sumB2 = 0;
         let n = 0;
 
-        // Sample the interior of this block (avoid edges where JPEG artifacts occur)
+        // Sample the interior of this block
         for (let py = marginY; py < scaleY - marginY; py++) {
           for (let px = marginX; px < scaleX - marginX; px++) {
-            const x = blockStartX + px;
-            const y = blockStartY + py;
+            const x = Math.floor(blockStartX + px);
+            const y = Math.floor(blockStartY + py);
             if (x >= width || y >= height) continue;
 
             const idx = (y * width + x) * 4;
@@ -134,31 +131,82 @@ export function detectPixelScaleAndOffset(imageData: ImageData): PixelScaleResul
       }
     }
 
-    return blockCount > 0 ? totalVariance / blockCount : Infinity;
+    return { variance: blockCount > 0 ? totalVariance / blockCount : Infinity, count: blockCount };
   };
 
   /**
-   * Find the scale with minimum block variance.
-   * Uses integer scaling for consistent pixel art alignment.
+   * Measures block uniformity across multiple regions of the image.
+   * This ensures the scale works well everywhere, not just the center.
    */
-  let bestScale = minScale;
+  const measureMultiRegionVariance = (
+    scaleX: number,
+    scaleY: number,
+    offsetX: number,
+    offsetY: number
+  ): number => {
+    const blocksX = Math.floor((width - offsetX) / scaleX);
+    const blocksY = Math.floor((height - offsetY) / scaleY);
+
+    if (blocksX < 10 || blocksY < 10) return Infinity;
+
+    // Define multiple sample regions across the image
+    const regions = [
+      // Center region (largest weight)
+      { x1: Math.floor(blocksX * 0.3), x2: Math.floor(blocksX * 0.7),
+        y1: Math.floor(blocksY * 0.3), y2: Math.floor(blocksY * 0.7), weight: 2 },
+      // Top-left
+      { x1: Math.floor(blocksX * 0.05), x2: Math.floor(blocksX * 0.3),
+        y1: Math.floor(blocksY * 0.05), y2: Math.floor(blocksY * 0.3), weight: 1 },
+      // Top-right
+      { x1: Math.floor(blocksX * 0.7), x2: Math.floor(blocksX * 0.95),
+        y1: Math.floor(blocksY * 0.05), y2: Math.floor(blocksY * 0.3), weight: 1 },
+      // Bottom-left
+      { x1: Math.floor(blocksX * 0.05), x2: Math.floor(blocksX * 0.3),
+        y1: Math.floor(blocksY * 0.7), y2: Math.floor(blocksY * 0.95), weight: 1 },
+      // Bottom-right
+      { x1: Math.floor(blocksX * 0.7), x2: Math.floor(blocksX * 0.95),
+        y1: Math.floor(blocksY * 0.7), y2: Math.floor(blocksY * 0.95), weight: 1 },
+    ];
+
+    let totalWeightedVariance = 0;
+    let totalWeight = 0;
+
+    for (const region of regions) {
+      const result = measureRegionVariance(
+        scaleX, scaleY, offsetX, offsetY,
+        region.x1, region.x2, region.y1, region.y2
+      );
+      if (result.count > 0) {
+        totalWeightedVariance += result.variance * region.weight;
+        totalWeight += region.weight;
+      }
+    }
+
+    return totalWeight > 0 ? totalWeightedVariance / totalWeight : Infinity;
+  };
+
+  /**
+   * Find the best scale, testing both integer and fractional values.
+   */
+  let bestScaleX = minScale;
+  let bestScaleY = minScale;
   let bestVariance = Infinity;
   let bestOffsetX = 0;
   let bestOffsetY = 0;
 
-  console.log(`Searching scales ${minScale}-${maxScale}...`);
+  console.log(`Searching scales ${minScale}-${maxScale} (including fractional)...`);
 
+  // First pass: find best integer scale
   for (let scale = minScale; scale <= maxScale; scale++) {
-    // For each scale, search for best offset
     let bestVarForScale = Infinity;
     let bestOxForScale = 0;
     let bestOyForScale = 0;
 
-    // Coarse search first
+    // Coarse offset search
     const step = Math.max(1, Math.floor(scale / 4));
     for (let ox = 0; ox < scale; ox += step) {
       for (let oy = 0; oy < scale; oy += step) {
-        const variance = measureBlockVariance(scale, scale, ox, oy);
+        const variance = measureMultiRegionVariance(scale, scale, ox, oy);
         if (variance < bestVarForScale) {
           bestVarForScale = variance;
           bestOxForScale = ox;
@@ -167,10 +215,10 @@ export function detectPixelScaleAndOffset(imageData: ImageData): PixelScaleResul
       }
     }
 
-    // Fine-tune around best coarse offset
+    // Fine-tune offset
     for (let ox = Math.max(0, bestOxForScale - step); ox <= Math.min(scale - 1, bestOxForScale + step); ox++) {
       for (let oy = Math.max(0, bestOyForScale - step); oy <= Math.min(scale - 1, bestOyForScale + step); oy++) {
-        const variance = measureBlockVariance(scale, scale, ox, oy);
+        const variance = measureMultiRegionVariance(scale, scale, ox, oy);
         if (variance < bestVarForScale) {
           bestVarForScale = variance;
           bestOxForScale = ox;
@@ -183,25 +231,69 @@ export function detectPixelScaleAndOffset(imageData: ImageData): PixelScaleResul
 
     if (bestVarForScale < bestVariance) {
       bestVariance = bestVarForScale;
-      bestScale = scale;
+      bestScaleX = scale;
+      bestScaleY = scale;
       bestOffsetX = bestOxForScale;
       bestOffsetY = bestOyForScale;
     }
   }
 
-  console.log(`Best: scale=${bestScale}, variance=${bestVariance.toFixed(1)}, offset=(${bestOffsetX}, ${bestOffsetY})`);
+  // Second pass: test fractional scales around the best integer scale
+  // This helps with images that were scaled by non-integer factors
+  const fractionalSteps = [0.25, 0.5, 0.75];
+  for (const frac of fractionalSteps) {
+    for (const baseScale of [bestScaleX - 1, bestScaleX, bestScaleX + 1]) {
+      if (baseScale < minScale) continue;
 
-  const scaleX = bestScale;
-  const scaleY = bestScale;
+      const testScale = baseScale + frac;
+
+      // Test a few offsets for fractional scale
+      for (let ox = 0; ox < testScale; ox += Math.max(1, Math.floor(testScale / 3))) {
+        for (let oy = 0; oy < testScale; oy += Math.max(1, Math.floor(testScale / 3))) {
+          const variance = measureMultiRegionVariance(testScale, testScale, ox, oy);
+          if (variance < bestVariance * 0.95) { // Only use fractional if significantly better
+            console.log(`  Fractional scale ${testScale.toFixed(2)}: variance=${variance.toFixed(1)}, offset=(${ox}, ${oy})`);
+            bestVariance = variance;
+            bestScaleX = testScale;
+            bestScaleY = testScale;
+            bestOffsetX = ox;
+            bestOffsetY = oy;
+          }
+        }
+      }
+    }
+  }
+
+  // Third pass: test separate X and Y scales if variance is still high
+  if (bestVariance > 50) {
+    console.log(`  Testing non-uniform X/Y scales...`);
+    for (let sx = bestScaleX - 1; sx <= bestScaleX + 1; sx += 0.5) {
+      for (let sy = bestScaleY - 1; sy <= bestScaleY + 1; sy += 0.5) {
+        if (sx < minScale || sy < minScale) continue;
+        if (sx === bestScaleX && sy === bestScaleY) continue;
+
+        const variance = measureMultiRegionVariance(sx, sy, bestOffsetX, bestOffsetY);
+        if (variance < bestVariance * 0.9) {
+          console.log(`  Non-uniform scale (${sx.toFixed(1)}, ${sy.toFixed(1)}): variance=${variance.toFixed(1)}`);
+          bestVariance = variance;
+          bestScaleX = sx;
+          bestScaleY = sy;
+        }
+      }
+    }
+  }
+
+  console.log(`Best: scaleX=${bestScaleX.toFixed(2)}, scaleY=${bestScaleY.toFixed(2)}, variance=${bestVariance.toFixed(1)}, offset=(${bestOffsetX}, ${bestOffsetY})`);
 
   // Log detection results
-  console.log(`Scale detection: scale=${bestScale}, offset=(${bestOffsetX}, ${bestOffsetY})`);
-  console.log(`  Output dimensions: ${Math.floor((width - bestOffsetX) / scaleX)}x${Math.floor((height - bestOffsetY) / scaleY)}`);
+  const outWidth = Math.floor((width - bestOffsetX) / bestScaleX);
+  const outHeight = Math.floor((height - bestOffsetY) / bestScaleY);
+  console.log(`  Output dimensions: ${outWidth}x${outHeight}`);
 
   return {
-    scale: bestScale,
-    scaleX,
-    scaleY,
+    scale: Math.round(bestScaleX), // Legacy: integer approximation
+    scaleX: bestScaleX,
+    scaleY: bestScaleY,
     offsetX: bestOffsetX,
     offsetY: bestOffsetY,
   };
@@ -318,18 +410,19 @@ export function resizePixelArt(
    * Extract the color from a block using mode-based sampling.
    * Samples multiple points in the block interior and returns the most common color.
    * This avoids JPEG artifacts which create spurious intermediate colors.
+   * Handles fractional scales by using floating-point coordinates.
    */
   const extractBlockColor = (blockX: number, blockY: number): [number, number, number, number] => {
     // Sample a grid of points within the block (avoiding edges where JPEG artifacts occur)
-    const margin = Math.max(1, Math.floor(Math.min(scaleX, scaleY) * 0.15));
+    const margin = Math.max(1, Math.floor(Math.min(scaleX, scaleY) * 0.2));
     const samples: Array<[number, number, number, number]> = [];
 
-    // Sample interior points
+    // Sample interior points using fractional coordinates
     const sampleStep = Math.max(1, Math.floor(Math.min(scaleX, scaleY) / 4));
     for (let dy = margin; dy < scaleY - margin; dy += sampleStep) {
       for (let dx = margin; dx < scaleX - margin; dx += sampleStep) {
-        const x = Math.min(blockX + dx, width - 1);
-        const y = Math.min(blockY + dy, height - 1);
+        const x = Math.min(Math.floor(blockX + dx), width - 1);
+        const y = Math.min(Math.floor(blockY + dy), height - 1);
         const idx = (y * width + x) * 4;
         samples.push([data[idx], data[idx + 1], data[idx + 2], data[idx + 3]]);
       }
@@ -337,8 +430,8 @@ export function resizePixelArt(
 
     // If no interior samples (small scale), fall back to center
     if (samples.length === 0) {
-      const cx = Math.min(blockX + Math.floor(scaleX / 2), width - 1);
-      const cy = Math.min(blockY + Math.floor(scaleY / 2), height - 1);
+      const cx = Math.min(Math.floor(blockX + scaleX / 2), width - 1);
+      const cy = Math.min(Math.floor(blockY + scaleY / 2), height - 1);
       const idx = (cy * width + cx) * 4;
       return [data[idx], data[idx + 1], data[idx + 2], data[idx + 3]];
     }
