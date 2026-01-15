@@ -20,16 +20,19 @@ npm run test:watch # Run tests in watch mode
 ### Data Flow
 
 1. **Image Input** (`imageProcessor.ts`): User uploads image → `loadImage()` extracts `ImageData`
-2. **Color Quantization** (`imageProcessor.ts`): `quantizeColors()` reduces to N colors using median-cut algorithm, produces `QuantizedResult` with palette and `PixelGrid` (2D array of color indices, -1 = transparent)
-3. **Mesh Generation** (`meshGenerator.ts`): `generateMeshes()` creates Three.js `BufferGeometry` for each color layer plus a base mesh
-4. **Preview** (`preview.ts`): Three.js scene with OrbitControls displays the model
-5. **Export** (`exporter.ts`): `exportSTL()` or `export3MF()` generates downloadable files
+2. **Background Removal** (`imageProcessor.ts`): Optional removal of background color with tolerance
+3. **Auto Scale Detection** (`imageProcessor.ts`): Detects if pixel art is upscaled and finds optimal dimensions
+4. **Color Quantization** (`imageProcessor.ts`): `quantizeColors()` reduces to N colors, produces `QuantizedResult` with palette and `PixelGrid` (2D array of color indices, -1 = transparent)
+5. **Mesh Generation** (`meshGenerator.ts`): `generateMeshes()` creates Three.js `BufferGeometry` for each color layer plus a base mesh
+6. **Preview** (`preview.ts`): Three.js scene with OrbitControls displays the model
+7. **Export** (`exporter.ts`): `exportSTL()` or `export3MF()` generates downloadable files
 
 ### Key Types
 
 - `PixelGrid`: `number[][]` where -1 = transparent, other values = palette index
 - `Color`: `{ r, g, b, hex }`
 - `MeshResult`: `{ colorMeshes: Map<number, BufferGeometry>, baseMesh: BufferGeometry | null, keyholeApplied: boolean }`
+- `QuantizedResult`: `{ palette: Color[], pixels: PixelGrid, width: number, height: number }`
 
 ### Mesh Structure
 
@@ -46,10 +49,48 @@ Meshes must be watertight (zero boundary edges) and manifold (each edge shared b
 - **STL**: Single merged mesh, binary format, no color
 - **3MF**: ZIP archive with XML, separate objects per color with material assignments
 
+## UI Structure
+
+The UI uses collapsible panels with localStorage persistence for panel states:
+
+- **Image Input Panel**: Drag & drop or file selector, input/output preview with zoom/pan
+- **Background Removal Panel**: Toggle, color picker with eyedropper, tolerance slider, auto-detection on load
+- **Physical Dimensions Panel**: Width/height inputs, unit toggle (mm/inches)
+- **3D Height Settings Panel**: Pixel height slider, base toggle and height slider, base color picker
+- **Keyhole Options Panel**: Enable toggle, position selector
+- **Color Palette Panel**: Color count display, reduce toggle with slider/+/- buttons, individual color swatches with X delete buttons
+- **3D Preview Panel**: Three.js canvas with orbit controls, reset view button
+- **Export Panel**: Format toggle (STL/3MF), filename input, download button
+
+### Color Management
+
+- **Reduce color count**: Slider sets target, +/- buttons for fine control
+- **Individual deletion**: X button on each color swatch removes that color, remaps pixels to nearest
+- **Color restoration**: Manually deleted colors (X button) are prioritized for restoration via + button
+- **Auto-deleted colors**: Colors removed via slider can also be restored
+
 ## Testing
 
 Tests in `src/manifold.test.ts` verify mesh geometry is valid for 3D printing. They analyze edge usage to ensure:
 - Zero non-manifold edges (used by >2 faces)
 - Zero boundary edges (used by only 1 face)
 
-Test images should be placed in the project root (e.g., `queen.png`, `ral.png`).
+Tests in `src/imageProcessing.test.ts` verify:
+- Background removal with flood-fill behavior
+- Pixel scale detection for upscaled images
+- Color accuracy after downscaling
+- Non-uniform scale detection
+
+Test images should be placed in the project root (e.g., `queen.png`, `ral.png`, `ral2.jpg`).
+
+## Default Values
+
+| Setting | Default |
+|---------|---------|
+| Width | 50mm |
+| Pixel Height | 1mm |
+| Base Height | 2mm |
+| Base Enabled | true |
+| Color Reduce Target | 8 |
+| Background Tolerance | 10 |
+| Export Format | 3MF |

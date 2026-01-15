@@ -15,8 +15,8 @@ A single-page web application that converts pixel art images or photographs into
 | Build Tool | Vite | Fast dev server, simple config, outputs static files for GitHub Pages |
 | Language | TypeScript | Type safety, better IDE support, catches bugs at compile time |
 | 3D Engine | Three.js | Industry standard for web 3D, handles rendering and geometry generation |
-| Styling | CSS (dark theme) | Native CSS, no framework dependency |
-| Error Tracking | Sentry (free tier) | Capture JavaScript errors in production for debugging |
+| Styling | CSS (dark theme with blue accents) | Native CSS, no framework dependency |
+| Testing | Vitest | Fast unit testing compatible with Vite |
 
 ### For iOS Developers New to Web Dev
 
@@ -34,34 +34,52 @@ A single-page web application that converts pixel art images or photographs into
 - **Drag & drop zone** or file selector button
 - Accepted formats: PNG, JPG, GIF, WebP
 - **Transparency handling:** Pixels with <50% opacity are filtered out (treated as background)
-- **Resize/downscale option:** User can reduce image resolution before conversion (e.g., "Treat as 32x32")
-  - Show warning if image exceeds 64px in either dimension
-  - Suggest appropriate downscale factor
+- **Auto scale detection:** Automatically detects upscaled pixel art and downsamples to native resolution
+- **Input/Output preview:** Side-by-side comparison with zoom and pan controls
+- **Pixel grid overlay:** Toggle to visualize detected pixel boundaries
 
-### 2. Color Processing
+### 2. Background Removal
 
-- **Color quantization:** Reduce image to N colors using median-cut or k-means algorithm
-- **Default:** 8 colors
-- **Range:** 2-16 colors (user adjustable via slider or input)
-- **Color palette panel:** Always visible, showing extracted colors with hex values
+- **Toggle to enable/disable** background color removal
+- **Color picker with eyedropper tool:** Click on image to select background color
+- **Auto-detection:** Background color is automatically guessed when image loads (analyzes edge pixels)
+- **Tolerance slider:** 0-50 range for color matching flexibility
+- **Flood-fill behavior:** Only removes background connected to image edges
 
-### 3. Dimension Controls
+### 3. Color Processing
+
+- **Color extraction:** Automatically extracts all unique colors from image
+- **Color reduction toggle:** Enable to reduce palette to target count
+- **Target color slider:** Set desired number of colors (2 to max detected)
+- **Increment/decrement buttons:** Fine-tune color count one at a time
+- **Individual color deletion:** X button on each color swatch to remove specific colors
+- **Color restoration:** Deleted colors can be restored with + button
+  - Manually deleted colors (X button) prioritized over auto-deleted (slider)
+- **Color palette panel:** Shows all colors with hex values and delete buttons
+
+### 4. Dimension Controls
 
 - **Width/Height input:** User sets ONE dimension, the other auto-calculates from aspect ratio
   - Linked toggle to switch which dimension is primary
   - Default: 50mm width
 - **Unit selection:** Toggle between Imperial (inches) and Metric (mm)
   - Internally always work in mm, convert for display only
-- **Pixel height:** Adjustable height of each pixel "block" (default: 2mm)
-- **Base height:** Height of the solid base beneath pixels (default: 1mm)
+- **Live dimension display:** Shows calculated output dimensions
 
-### 4. Base Geometry
+### 5. 3D Height Settings
+
+- **Pixel height:** Adjustable height of each pixel "block" (default: 1mm, range: 0.5-10mm)
+- **Base toggle:** Enable/disable base layer
+- **Base height:** Height of the solid base beneath pixels (default: 2mm, range: 0.5-5mm)
+- **Base color picker:** Choose color for base layer in 3MF export
+
+### 6. Base Geometry
 
 - Base matches the exact footprint of non-transparent pixels (not a bounding rectangle)
 - Base is a single solid color (neutral gray in preview, user's choice in export)
 - All base geometry merged into one mesh for the base "object" in 3MF
 
-### 5. Keyhole Feature
+### 7. Keyhole Feature
 
 - **Optional toggle:** Enable/disable hanging hole for keychain ring
 - **Position selector:** Dropdown with options:
@@ -72,15 +90,17 @@ A single-page web application that converts pixel art images or photographs into
   - Diameter: 4mm (standard for small keyring)
   - Position: Centered within a small tab extension from the base
 
-### 6. 3D Preview
+### 8. 3D Preview
 
 - **Renderer:** Three.js WebGL canvas
 - **Camera controls:** Orbit, zoom, and pan (OrbitControls)
+- **Reset view button:** Return camera to default position
+- **Grid helper:** Shows scale reference (mm or inches based on unit selection)
 - **Base color in preview:** Fixed neutral gray (#808080)
-- **Pixel colors:** Match quantized palette from image
+- **Pixel colors:** Match extracted/quantized palette from image
 - Background: Dark (#1a1a1a) to match UI theme
 
-### 7. Export Options
+### 9. Export Options
 
 #### STL Export
 - Single mesh containing all geometry
@@ -94,16 +114,16 @@ A single-page web application that converts pixel art images or photographs into
 - **Manifest includes:** Color metadata for compatible slicers
 
 #### File Naming
-- **Default filename:** `{original_filename}_keychain.stl` or `.3mf`
+- **Default filename:** `pixel_art_keychain.stl` or `.3mf`
 - **Editable:** Text input to customize before export
 
-### 8. Error Handling
+### 10. UI/UX Features
 
-- **3MF export failure:**
-  - Show retry button
-  - Display technical error details (expandable)
-  - Suggest STL as fallback
-- **General errors:** Toast notifications with actionable messages
+- **Collapsible panels:** Most panels can be collapsed/expanded
+- **State persistence:** Panel collapse states saved to localStorage
+- **Dark theme:** Deep gray backgrounds with blue accent colors
+- **Sharp modern styling:** Clean lines, subtle shadows, smooth transitions
+- **Responsive layout:** Desktop-first with tablet/mobile adaptations
 
 ---
 
@@ -113,8 +133,9 @@ A single-page web application that converts pixel art images or photographs into
 
 1. Parse image data from canvas
 2. Apply transparency filter (alpha < 128 = transparent)
-3. Run color quantization to reduce to target palette
-4. For each color in palette:
+3. Optionally remove background color with tolerance
+4. Run color quantization/reduction if enabled
+5. For each color in palette:
    - Identify all pixels of that color
    - **Merge adjacent pixels** into larger rectangles (greedy meshing algorithm)
    - Generate box geometry for each merged rectangle
@@ -134,6 +155,13 @@ Instead of creating one cube per pixel:
 - Smaller file sizes
 - Faster slicing in 3D printing software
 
+### Manifold Geometry
+
+Meshes must be watertight for 3D printing:
+- Zero boundary edges (used by only 1 face)
+- Zero non-manifold edges (used by >2 faces)
+- Vertex offsetting at diagonal corners prevents shared edges
+
 ### Base Generation
 
 1. Create 2D polygon from outline of non-transparent pixels
@@ -147,40 +175,67 @@ Instead of creating one cube per pixel:
 
 ```
 +--------------------------------------------------+
-|  [Logo] Pixel Art to 3D Converter    [Dark Theme]|
+|  Pixel Art to 3D Converter                       |
 +--------------------------------------------------+
-|                    |                              |
-|  +-------------+   |     +------------------+     |
-|  | DROP IMAGE  |   |     |                  |     |
-|  |   HERE      |   |     |   3D PREVIEW     |     |
-|  |  or click   |   |     |    (Three.js)    |     |
-|  +-------------+   |     |                  |     |
-|                    |     +------------------+     |
-|  SETTINGS          |                              |
-|  ---------------   |     COLOR PALETTE           |
-|  Width: [50] mm    |     +-----------------+     |
-|  Height: auto      |     | #FF5733  [swatch]|     |
-|  [x] Lock aspect   |     | #33FF57  [swatch]|     |
-|                    |     | #3357FF  [swatch]|     |
-|  Units: mm / in    |     | ...              |     |
-|                    |     +-----------------+     |
-|  Pixel Height: 2mm |                              |
-|  Base Height: 1mm  |     EXPORT                  |
-|                    |     +------------------+     |
-|  Colors: [8] ----  |     | Filename:        |     |
-|                    |     | [sprite_keychain]|     |
-|  Resize to: [32px] |     |                  |     |
-|                    |     | Format: STL / 3MF|     |
-|  [ ] Add Keyhole   |     |                  |     |
-|  Position: [v Top] |     | [DOWNLOAD]       |     |
-|                    |     +------------------+     |
+|                                                  |
+|  +-- IMAGE INPUT (collapsible) ---------------+ |
+|  | [DROP IMAGE HERE or click to upload]       | |
+|  | +--------+  +--------+                     | |
+|  | | Input  |  | Output |  [Show Grid] toggle | |
+|  | +--------+  +--------+                     | |
+|  +--------------------------------------------+ |
+|                                                  |
+|  +-- BACKGROUND REMOVAL (collapsible) --------+ |
+|  | [x] Remove background  [color] [eyedropper]| |
+|  | Tolerance: [====o====] 10                  | |
+|  +--------------------------------------------+ |
+|                                                  |
+|  +-- 3D PREVIEW (always visible) -------------+ |
+|  | +--------------------------------------+   | |
+|  | |                                      |   | |
+|  | |         Three.js Canvas              |   | |
+|  | |                                      |   | |
+|  | +--------------------------------------+   | |
+|  | [Reset View]                               | |
+|  +--------------------------------------------+ |
+|                                                  |
+|  +-- PHYSICAL DIMENSIONS (collapsible) -------+ |
+|  | Width: [50] mm    Height: [auto] mm        | |
+|  | Units: [mm] / [inches]                     | |
+|  +--------------------------------------------+ |
+|                                                  |
+|  +-- 3D HEIGHT SETTINGS (collapsible) --------+ |
+|  | Pixel Height: [====o====] 1.0 mm           | |
+|  | [x] Include base layer                     | |
+|  | Base Height: [====o====] 2.0 mm            | |
+|  | Base Color: [#000000]                      | |
+|  +--------------------------------------------+ |
+|                                                  |
+|  +-- KEYHOLE OPTIONS (collapsible) -----------+ |
+|  | [x] Add keyhole                            | |
+|  | Position: [Top-center v]                   | |
+|  +--------------------------------------------+ |
+|                                                  |
+|  +-- COLOR PALETTE (collapsible) -------------+ |
+|  | [x] Reduce color count  [-] [====] [+]     | |
+|  | +------+ +------+ +------+ +------+        | |
+|  | |[x]   | |[x]   | |[x]   | |[x]   |        | |
+|  | |color1| |color2| |color3| |color4|        | |
+|  | +------+ +------+ +------+ +------+        | |
+|  +--------------------------------------------+ |
+|                                                  |
+|  +-- EXPORT (always visible) -----------------+ |
+|  | Format: [STL] / [3MF]                      | |
+|  | Filename: [pixel_art_keychain] .3mf        | |
+|  | [        DOWNLOAD        ]                 | |
+|  +--------------------------------------------+ |
 +--------------------------------------------------+
 ```
 
 ### Responsive Behavior (Desktop-First)
 
-- **Desktop (>1024px):** Two-column layout as shown
-- **Tablet (768-1024px):** Stack preview below controls
+- **Desktop (>1024px):** Full layout as shown
+- **Tablet (768-1024px):** Stacked panels, smaller preview
 - **Mobile (<768px):** Single column, scrollable. Preview may be smaller.
 
 ---
@@ -193,19 +248,23 @@ Instead of creating one cube per pixel:
 ├── package.json
 ├── tsconfig.json
 ├── vite.config.ts
+├── CLAUDE.md              # Claude Code guidance
+├── SPECS.md               # This file
 ├── src/
-│   ├── main.ts              # Entry point, event handlers
-│   ├── style.css            # Global styles, dark theme
-│   ├── imageProcessor.ts    # Load image, quantize colors
-│   ├── meshGenerator.ts     # Pixel-to-3D conversion, greedy meshing
-│   ├── exporter.ts          # STL and 3MF export logic
-│   ├── preview.ts           # Three.js scene setup, controls
-│   └── types.ts             # TypeScript interfaces
+│   ├── main.ts            # Entry point, event handlers, UI state
+│   ├── style.css          # Global styles, dark theme, components
+│   ├── imageProcessor.ts  # Load image, background removal, quantize colors
+│   ├── meshGenerator.ts   # Pixel-to-3D conversion, greedy meshing, manifold
+│   ├── exporter.ts        # STL and 3MF export logic
+│   ├── preview.ts         # Three.js scene setup, controls
+│   ├── types.ts           # TypeScript interfaces
+│   ├── manifold.test.ts   # Mesh geometry tests
+│   └── imageProcessing.test.ts  # Image processing tests
 ├── public/
 │   └── favicon.ico
 └── .github/
     └── workflows/
-        └── deploy.yml       # GitHub Actions for Pages deployment
+        └── deploy.yml     # GitHub Actions for Pages deployment
 ```
 
 ---
@@ -215,13 +274,14 @@ Instead of creating one cube per pixel:
 ```json
 {
   "dependencies": {
-    "three": "^0.160.0"
+    "three": "^0.160.0",
+    "fflate": "^0.8.0"
   },
   "devDependencies": {
     "typescript": "^5.3.0",
     "vite": "^5.0.0",
     "@types/three": "^0.160.0",
-    "@sentry/browser": "^7.0.0"
+    "vitest": "^2.0.0"
   }
 }
 ```
@@ -274,13 +334,17 @@ jobs:
 |---------|---------|---------------|
 | Width | 50mm | 1-500mm |
 | Units | Metric (mm) | mm / inches |
-| Pixel Height | 2mm | 0.5-10mm |
-| Base Height | 1mm | 0.5-5mm |
-| Color Count | 8 | 2-16 |
+| Pixel Height | 1mm | 0.5-10mm |
+| Base Height | 2mm | 0.5-5mm |
+| Base Enabled | true | On/Off |
+| Base Color | #000000 | Any hex color |
+| Color Reduce Target | 8 | 2-max detected |
+| Background Removal | Off | On/Off |
+| Background Tolerance | 10 | 0-50 |
 | Transparency Threshold | 50% | Fixed |
 | Keyhole | Disabled | On/Off |
 | Keyhole Position | Top-center | Top-left/center/right |
-| Export Format | STL | STL / 3MF |
+| Export Format | 3MF | STL / 3MF |
 
 ---
 
@@ -294,26 +358,9 @@ These features are explicitly out of scope for v1 but the architecture should no
 - Magnet hole option (for fridge magnets)
 - Batch processing multiple images
 - Save/load project settings
-
----
-
-## Error Tracking Setup (Sentry)
-
-Initialize in `main.ts`:
-
-```typescript
-import * as Sentry from "@sentry/browser";
-
-Sentry.init({
-  dsn: "YOUR_SENTRY_DSN",
-  environment: import.meta.env.MODE,
-});
-```
-
-Captures:
-- Unhandled JavaScript exceptions
-- 3MF export failures with stack traces
-- Three.js WebGL context errors
+- Undo/redo for color changes
+- Color picker to change individual colors
+- Import/export color palettes
 
 ---
 
