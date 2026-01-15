@@ -33,6 +33,11 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: List dist contents
+        run: |
+          echo "Contents of dist:"
+          ls -laR ./dist
+
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
