@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://oct0f1sh.github.io/PixelArtTo3D/sitemap.xml
