@@ -835,46 +835,43 @@ function colorDistance(c1: Color, c2: Color): number {
 }
 
 /**
- * Merges similar colors based on a similarity threshold.
- * Colors within the threshold distance are merged into a single color.
+ * Reduces the color palette to a target number of colors by iteratively
+ * merging the two most similar colors.
  *
- * @param colors - Array of unique colors
- * @param threshold - Similarity threshold (0-100). Higher = more aggressive merging.
- *                    0 = no merging, 100 = very aggressive merging
- * @returns Array of merged colors
+ * @param colors - Array of unique colors (sorted by frequency, most common first)
+ * @param targetCount - The target number of colors to reduce to
+ * @returns Array of reduced colors
  */
-function mergeSimilarColors(colors: Color[], threshold: number): Color[] {
+function reduceToColorCount(colors: Color[], targetCount: number): Color[] {
   if (colors.length === 0) return [];
-  if (threshold === 0) return colors;
+  if (colors.length <= targetCount) return colors;
+  if (targetCount < 1) return [colors[0]];
 
-  // Convert threshold (0-100) to a color distance (0-441, max RGB distance)
-  const maxDistance = Math.sqrt(255 * 255 * 3); // ~441
-  const distanceThreshold = (threshold / 100) * maxDistance;
+  // Create a working copy with distance cache
+  const working = colors.map(c => ({ ...c }));
 
-  const merged: Color[] = [];
-  const used = new Set<number>();
+  // Iteratively merge the two most similar colors until we reach target count
+  while (working.length > targetCount) {
+    let minDistance = Infinity;
+    let mergeJ = 1;
 
-  for (let i = 0; i < colors.length; i++) {
-    if (used.has(i)) continue;
-
-    const baseColor = colors[i];
-    used.add(i);
-
-    // Find all similar colors
-    for (let j = i + 1; j < colors.length; j++) {
-      if (used.has(j)) continue;
-
-      const distance = colorDistance(baseColor, colors[j]);
-      if (distance <= distanceThreshold) {
-        used.add(j);
+    // Find the two most similar colors
+    for (let i = 0; i < working.length; i++) {
+      for (let j = i + 1; j < working.length; j++) {
+        const distance = colorDistance(working[i], working[j]);
+        if (distance < minDistance) {
+          minDistance = distance;
+          mergeJ = j;
+        }
       }
     }
 
-    // Use the most common color (first one) as the representative
-    merged.push(baseColor);
+    // Merge: keep the first color (more common due to sorting), remove the second
+    // The first color in the sorted list is more common, so we keep it as the representative
+    working.splice(mergeJ, 1);
   }
 
-  return merged;
+  return working;
 }
 
 /**
@@ -910,16 +907,17 @@ function findNearestColorIndex(r: number, g: number, b: number, palette: Color[]
 }
 
 /**
- * Extracts all unique colors from an ImageData, optionally merging similar colors.
+ * Extracts all unique colors from an ImageData, optionally reducing to a target color count.
  *
  * @param imageData - The source ImageData to process
- * @param similarityThreshold - Optional threshold (0-100) for merging similar colors.
- *                              0 = no merging (default), higher = more aggressive merging
+ * @param targetColorCount - Optional target number of colors. If provided and less than
+ *                           the unique color count, colors will be merged to reach this target.
+ *                           0 or undefined = no reduction (default)
  * @returns QuantizedResult containing the palette and pixel grid
  */
 export function quantizeColors(
   imageData: ImageData,
-  similarityThreshold: number = 0
+  targetColorCount: number = 0
 ): QuantizedResult {
   const { data, width, height } = imageData;
 
@@ -929,9 +927,9 @@ export function quantizeColors(
   // Extract all unique colors sorted by frequency
   const uniqueColors = extractUniqueColors(opaquePixels);
 
-  // Optionally merge similar colors
-  const palette = similarityThreshold > 0
-    ? mergeSimilarColors(uniqueColors, similarityThreshold)
+  // Optionally reduce to target color count
+  const palette = targetColorCount > 0 && targetColorCount < uniqueColors.length
+    ? reduceToColorCount(uniqueColors, targetColorCount)
     : uniqueColors;
 
   // Create pixel grid with color indices

@@ -69,8 +69,9 @@ interface AppState {
   baseEnabled: boolean;
   baseHeight: number;
   baseColor: string;
-  colorMergeEnabled: boolean;
-  colorMergeThreshold: number;
+  colorReduceEnabled: boolean;
+  colorReduceTarget: number;
+  originalColorCount: number;
   keyholeEnabled: boolean;
   keyholePosition: 'top-left' | 'top-center' | 'top-right';
   exportFormat: 'stl' | '3mf';
@@ -111,8 +112,9 @@ const state: AppState = {
   baseEnabled: true,
   baseHeight: 1,
   baseColor: '#000000',
-  colorMergeEnabled: false,
-  colorMergeThreshold: 1,
+  colorReduceEnabled: false,
+  colorReduceTarget: 8,
+  originalColorCount: 0,
   keyholeEnabled: false,
   keyholePosition: 'top-center',
   exportFormat: '3mf',
@@ -204,10 +206,10 @@ const elements = {
   // Color palette
   colorPalette: document.getElementById('color-palette') as HTMLDivElement,
   paletteCount: document.getElementById('palette-count') as HTMLSpanElement,
-  colorMergeToggle: document.getElementById('color-merge-toggle') as HTMLInputElement,
-  colorMergeOptions: document.getElementById('color-merge-options') as HTMLDivElement,
-  colorMergeSlider: document.getElementById('color-merge-slider') as HTMLInputElement,
-  colorMergeValue: document.getElementById('color-merge-value') as HTMLSpanElement,
+  colorReduceToggle: document.getElementById('color-reduce-toggle') as HTMLInputElement,
+  colorReduceOptions: document.getElementById('color-reduce-options') as HTMLDivElement,
+  colorReduceSlider: document.getElementById('color-reduce-slider') as HTMLInputElement,
+  colorReduceInput: document.getElementById('color-reduce-value') as HTMLInputElement,
 
   // Export
   formatToggle: document.getElementById('format-toggle') as HTMLDivElement,
@@ -735,9 +737,25 @@ async function processImage(): Promise<void> {
     updateImagePreview(previewImageData);
   }
 
-  // Extract colors from the processed image, optionally merging similar colors
-  const threshold = state.colorMergeEnabled ? state.colorMergeThreshold : 0;
-  state.quantizedResult = quantizeColors(imageDataToProcess, threshold);
+  // First, get all unique colors to know the original count
+  const fullResult = quantizeColors(imageDataToProcess, 0);
+  state.originalColorCount = fullResult.palette.length;
+
+  // Update slider and input max to match original color count
+  elements.colorReduceSlider.max = String(state.originalColorCount);
+  elements.colorReduceInput.max = String(state.originalColorCount);
+  if (state.colorReduceTarget > state.originalColorCount) {
+    state.colorReduceTarget = state.originalColorCount;
+    elements.colorReduceSlider.value = String(state.colorReduceTarget);
+    elements.colorReduceInput.value = String(state.colorReduceTarget);
+  }
+
+  // Apply color reduction if enabled and target is less than original
+  if (state.colorReduceEnabled && state.colorReduceTarget < state.originalColorCount) {
+    state.quantizedResult = quantizeColors(imageDataToProcess, state.colorReduceTarget);
+  } else {
+    state.quantizedResult = fullResult;
+  }
 
   // Update output preview with the quantized image (shows merged colors)
   const quantizedImageData = quantizedResultToImageData(state.quantizedResult);
@@ -1514,14 +1532,14 @@ function setupEventListeners(): void {
     }
   });
 
-  // Color merge toggle
-  elements.colorMergeToggle.addEventListener('change', () => {
-    state.colorMergeEnabled = elements.colorMergeToggle.checked;
+  // Color reduce toggle
+  elements.colorReduceToggle.addEventListener('change', () => {
+    state.colorReduceEnabled = elements.colorReduceToggle.checked;
 
-    if (state.colorMergeEnabled) {
-      elements.colorMergeOptions.classList.add('visible');
+    if (state.colorReduceEnabled) {
+      elements.colorReduceOptions.classList.add('visible');
     } else {
-      elements.colorMergeOptions.classList.remove('visible');
+      elements.colorReduceOptions.classList.remove('visible');
     }
 
     if (state.originalImageData) {
@@ -1529,14 +1547,39 @@ function setupEventListeners(): void {
     }
   });
 
-  // Color merge slider
-  elements.colorMergeSlider.addEventListener('input', () => {
-    state.colorMergeThreshold = parseInt(elements.colorMergeSlider.value) || 10;
-    elements.colorMergeValue.textContent = `${state.colorMergeThreshold}%`;
+  // Color reduce slider
+  elements.colorReduceSlider.addEventListener('input', () => {
+    const value = parseInt(elements.colorReduceSlider.value);
+    state.colorReduceTarget = value;
+    elements.colorReduceInput.value = String(value);
   });
 
-  elements.colorMergeSlider.addEventListener('change', () => {
-    if (state.originalImageData && state.colorMergeEnabled) {
+  elements.colorReduceSlider.addEventListener('change', () => {
+    if (state.originalImageData && state.colorReduceEnabled) {
+      processImage();
+    }
+  });
+
+  // Color reduce input (text box)
+  elements.colorReduceInput.addEventListener('input', () => {
+    const value = parseInt(elements.colorReduceInput.value);
+    if (!isNaN(value)) {
+      const clamped = Math.max(2, Math.min(state.originalColorCount || 256, value));
+      state.colorReduceTarget = clamped;
+      elements.colorReduceSlider.value = String(clamped);
+    }
+  });
+
+  elements.colorReduceInput.addEventListener('change', () => {
+    // Clamp and sync on blur/enter
+    let value = parseInt(elements.colorReduceInput.value) || 2;
+    const max = state.originalColorCount || 256;
+    value = Math.max(2, Math.min(max, value));
+    state.colorReduceTarget = value;
+    elements.colorReduceInput.value = String(value);
+    elements.colorReduceSlider.value = String(value);
+
+    if (state.originalImageData && state.colorReduceEnabled) {
       processImage();
     }
   });

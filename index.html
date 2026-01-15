@@ -383,32 +383,39 @@
                 <label class="checkbox-group">
                   <input
                     type="checkbox"
-                    id="color-merge-toggle"
+                    id="color-reduce-toggle"
                     class="checkbox-input"
                   />
-                  <span class="checkbox-label">Merge similar colors</span>
+                  <span class="checkbox-label">Reduce color count</span>
                 </label>
               </div>
 
-              <div class="color-merge-options" id="color-merge-options">
+              <div class="color-reduce-options" id="color-reduce-options">
                 <div class="control-group">
-                  <label class="control-label" for="color-merge-slider">
-                    Similarity Threshold
+                  <label class="control-label" for="color-reduce-slider">
+                    Target Colors
                   </label>
                   <div class="range-container">
                     <input
                       type="range"
-                      id="color-merge-slider"
+                      id="color-reduce-slider"
                       class="range-slider"
-                      min="1"
-                      max="50"
-                      value="1"
+                      min="2"
+                      max="256"
+                      value="8"
                       step="1"
                     />
-                    <span class="range-value" id="color-merge-value">1%</span>
+                    <input
+                      type="number"
+                      id="color-reduce-value"
+                      class="range-value-input"
+                      min="2"
+                      max="256"
+                      value="8"
+                    />
                   </div>
                   <p class="control-hint">
-                    Higher values merge more colors together
+                    Merge similar colors until this count is reached
                   </p>
                 </div>
               </div>

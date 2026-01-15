@@ -547,6 +547,36 @@ select {
   font-weight: 500;
 }
 
+.range-value-input {
+  width: 50px;
+  flex: 0 0 50px;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  text-align: center;
+  font-size: 0.8rem;
+  font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+  color: var(--accent-hover);
+  font-weight: 500;
+}
+
+.range-value-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-glow);
+}
+
+.range-value-input::-webkit-inner-spin-button,
+.range-value-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.range-value-input[type="number"] {
+  -moz-appearance: textfield;
+}
+
 /* ================================================
    Toggle Group
    ================================================ */
@@ -934,10 +964,10 @@ input[type="color"]::-moz-color-swatch {
 }
 
 /* ================================================
-   Color Merge Options
+   Color Reduce Options
    ================================================ */
 
-.color-merge-options {
+.color-reduce-options {
   display: none;
   margin-top: var(--spacing-sm);
   margin-bottom: var(--spacing-md);
@@ -947,12 +977,8 @@ input[type="color"]::-moz-color-swatch {
   border: 1px solid var(--border);
 }
 
-.color-merge-options.visible {
+.color-reduce-options.visible {
   display: block;
-}
-
-.color-merge-options .range-slider {
-  background: var(--bg-secondary);
 }
 
 /* ================================================
