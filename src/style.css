@@ -175,27 +175,30 @@ body {
   background-color: var(--bg-tertiary);
   border-radius: 8px;
   overflow: hidden;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: 1px solid var(--border-color);
 }
 
-.image-preview-container img,
-.image-preview-container canvas {
-  grid-area: 1 / 1;
+.image-preview-container img {
   max-width: 100%;
   max-height: 100%;
   image-rendering: pixelated;
   transform-origin: center center;
-}
-
-.image-preview-container img {
   border-radius: 0;
   border: none;
   object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
 .pixel-grid-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
   display: none;
 }

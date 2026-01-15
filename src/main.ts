@@ -258,50 +258,90 @@ function updateImagePreview(imageData: ImageData): void {
 
 /**
  * Draws the pixel grid overlay based on detected scale.
- * The canvas matches the image dimensions and follows the same CSS transform.
+ * Grid is drawn at screen resolution and stays sharp during zoom/pan.
  */
 function updatePixelGridOverlay(): void {
   const canvas = elements.pixelGridOverlay;
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
-  if (!state.pixelGridVisible || !state.detectedScale || !state.originalImageData) {
+  if (!state.pixelGridVisible || !state.detectedScale) {
+    canvas.classList.remove('visible');
+    return;
+  }
+
+  const img = elements.previewImage;
+  const imgNaturalWidth = img.naturalWidth;
+  const imgNaturalHeight = img.naturalHeight;
+
+  // Wait for image to load
+  if (!imgNaturalWidth || !imgNaturalHeight) {
     canvas.classList.remove('visible');
     return;
   }
 
   canvas.classList.add('visible');
 
+  const container = img.parentElement;
+  if (!container) return;
+
+  const containerRect = container.getBoundingClientRect();
+
+  // Set canvas to container size (screen resolution)
+  canvas.width = containerRect.width;
+  canvas.height = containerRect.height;
+  canvas.style.transform = 'none';
+
   const { scaleX, scaleY, offsetX, offsetY } = state.detectedScale;
-  const { width: imgWidth, height: imgHeight } = state.originalImageData;
 
-  // Set canvas size to match original image dimensions
-  canvas.width = imgWidth;
-  canvas.height = imgHeight;
+  // Get the image's layout size (before CSS transform) using offsetWidth/Height
+  const baseDisplayWidth = img.offsetWidth;
+  const baseDisplayHeight = img.offsetHeight;
 
-  // Apply the same transform as the image
-  canvas.style.transform = `translate(${state.inputPan.x}px, ${state.inputPan.y}px) scale(${state.inputZoom})`;
+  // Apply zoom
+  const displayWidth = baseDisplayWidth * state.inputZoom;
+  const displayHeight = baseDisplayHeight * state.inputZoom;
 
-  // Clear and draw
+  // Calculate center position with pan offset
+  const centerX = containerRect.width / 2 + state.inputPan.x;
+  const centerY = containerRect.height / 2 + state.inputPan.y;
+
+  // Image top-left corner
+  const imgLeft = centerX - displayWidth / 2;
+  const imgTop = centerY - displayHeight / 2;
+
+  // Pixel size in screen coordinates
+  const pixelScreenWidth = (scaleX / imgNaturalWidth) * displayWidth;
+  const pixelScreenHeight = (scaleY / imgNaturalHeight) * displayHeight;
+
+  // Offset in screen coordinates
+  const screenOffsetX = (offsetX / imgNaturalWidth) * displayWidth;
+  const screenOffsetY = (offsetY / imgNaturalHeight) * displayHeight;
+
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
+  ctx.strokeStyle = 'rgba(255, 0, 0, 0.6)';
   ctx.lineWidth = 1;
 
-  // Draw grid lines at original image scale
-  // Vertical lines
-  for (let x = offsetX; x <= imgWidth; x += scaleX) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, imgHeight);
-    ctx.stroke();
+  // Draw vertical lines
+  for (let x = screenOffsetX; x <= displayWidth + 0.5; x += pixelScreenWidth) {
+    const screenX = imgLeft + x;
+    if (screenX >= 0 && screenX <= containerRect.width) {
+      ctx.beginPath();
+      ctx.moveTo(screenX, Math.max(0, imgTop));
+      ctx.lineTo(screenX, Math.min(containerRect.height, imgTop + displayHeight));
+      ctx.stroke();
+    }
   }
 
-  // Horizontal lines
-  for (let y = offsetY; y <= imgHeight; y += scaleY) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(imgWidth, y);
-    ctx.stroke();
+  // Draw horizontal lines
+  for (let y = screenOffsetY; y <= displayHeight + 0.5; y += pixelScreenHeight) {
+    const screenY = imgTop + y;
+    if (screenY >= 0 && screenY <= containerRect.height) {
+      ctx.beginPath();
+      ctx.moveTo(Math.max(0, imgLeft), screenY);
+      ctx.lineTo(Math.min(containerRect.width, imgLeft + displayWidth), screenY);
+      ctx.stroke();
+    }
   }
 }
 
@@ -317,49 +357,84 @@ function updateOutputPreview(imageData: ImageData): void {
 
 /**
  * Draws the pixel grid overlay for the output image (1 pixel = 1 cell).
- * The canvas matches the image dimensions and follows the same CSS transform.
+ * Grid is drawn at screen resolution and stays sharp during zoom/pan.
  */
 function updateOutputGridOverlay(): void {
   const canvas = elements.outputGridOverlay;
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
-  if (!state.outputGridVisible || !state.processedImageData) {
+  if (!state.outputGridVisible) {
+    canvas.classList.remove('visible');
+    return;
+  }
+
+  const img = elements.outputPreviewImage;
+  const imgNaturalWidth = img.naturalWidth;
+  const imgNaturalHeight = img.naturalHeight;
+
+  // Wait for image to load
+  if (!imgNaturalWidth || !imgNaturalHeight) {
     canvas.classList.remove('visible');
     return;
   }
 
   canvas.classList.add('visible');
 
-  const { width: imgWidth, height: imgHeight } = state.processedImageData;
+  const container = img.parentElement;
+  if (!container) return;
 
-  // Set canvas size to match processed image dimensions
-  canvas.width = imgWidth;
-  canvas.height = imgHeight;
+  const containerRect = container.getBoundingClientRect();
 
-  // Apply the same transform as the image
-  canvas.style.transform = `translate(${state.outputPan.x}px, ${state.outputPan.y}px) scale(${state.outputZoom})`;
+  // Set canvas to container size (screen resolution)
+  canvas.width = containerRect.width;
+  canvas.height = containerRect.height;
+  canvas.style.transform = 'none';
 
-  // Clear and draw
+  // Get the image's layout size (before CSS transform) using offsetWidth/Height
+  const baseDisplayWidth = img.offsetWidth;
+  const baseDisplayHeight = img.offsetHeight;
+
+  // Apply zoom
+  const displayWidth = baseDisplayWidth * state.outputZoom;
+  const displayHeight = baseDisplayHeight * state.outputZoom;
+
+  // Calculate center position with pan offset
+  const centerX = containerRect.width / 2 + state.outputPan.x;
+  const centerY = containerRect.height / 2 + state.outputPan.y;
+
+  // Image top-left corner
+  const imgLeft = centerX - displayWidth / 2;
+  const imgTop = centerY - displayHeight / 2;
+
+  // Pixel size in screen coordinates (1 pixel = 1 cell for output)
+  const pixelScreenWidth = displayWidth / imgNaturalWidth;
+  const pixelScreenHeight = displayHeight / imgNaturalHeight;
+
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
+  ctx.strokeStyle = 'rgba(255, 0, 0, 0.6)';
   ctx.lineWidth = 1;
 
-  // Draw grid lines - each pixel is one cell
-  // Vertical lines
-  for (let x = 0; x <= imgWidth; x++) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, imgHeight);
-    ctx.stroke();
+  // Draw vertical lines
+  for (let i = 0; i <= imgNaturalWidth; i++) {
+    const screenX = imgLeft + i * pixelScreenWidth;
+    if (screenX >= 0 && screenX <= containerRect.width) {
+      ctx.beginPath();
+      ctx.moveTo(screenX, Math.max(0, imgTop));
+      ctx.lineTo(screenX, Math.min(containerRect.height, imgTop + displayHeight));
+      ctx.stroke();
+    }
   }
 
-  // Horizontal lines
-  for (let y = 0; y <= imgHeight; y++) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(imgWidth, y);
-    ctx.stroke();
+  // Draw horizontal lines
+  for (let i = 0; i <= imgNaturalHeight; i++) {
+    const screenY = imgTop + i * pixelScreenHeight;
+    if (screenY >= 0 && screenY <= containerRect.height) {
+      ctx.beginPath();
+      ctx.moveTo(Math.max(0, imgLeft), screenY);
+      ctx.lineTo(Math.min(containerRect.width, imgLeft + displayWidth), screenY);
+      ctx.stroke();
+    }
   }
 }
 
