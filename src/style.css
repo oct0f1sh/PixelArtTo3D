@@ -146,12 +146,87 @@ body {
   display: flex;
 }
 
-.image-preview img {
-  max-width: 100%;
-  max-height: 200px;
+.image-previews-row {
+  display: flex;
+  gap: 1rem;
+  width: 100%;
+}
+
+.image-preview-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.image-preview-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+}
+
+.image-preview-container {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background-color: var(--bg-tertiary);
   border-radius: 8px;
-  image-rendering: pixelated;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
   border: 1px solid var(--border-color);
+}
+
+.image-preview-container img,
+.image-preview-container canvas {
+  grid-area: 1 / 1;
+  max-width: 100%;
+  max-height: 100%;
+  image-rendering: pixelated;
+  transform-origin: center center;
+}
+
+.image-preview-container img {
+  border-radius: 0;
+  border: none;
+  object-fit: contain;
+}
+
+.pixel-grid-overlay {
+  pointer-events: none;
+  display: none;
+}
+
+.pixel-grid-overlay.visible {
+  display: block;
+}
+
+.image-preview-controls {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.image-preview-controls .toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.image-preview-controls .toggle-label:hover {
+  color: var(--text-primary);
+}
+
+.image-preview-controls input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
 }
 
 .image-info {

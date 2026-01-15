@@ -81,6 +81,20 @@ interface AppState {
   bgColor: { r: number; g: number; b: number } | null;
   bgTolerance: number;
   eyedropperActive: boolean;
+
+  // Pixel grid overlay
+  pixelGridVisible: boolean;
+  detectedScale: { scaleX: number; scaleY: number; offsetX: number; offsetY: number } | null;
+
+  // Output preview
+  outputGridVisible: boolean;
+  processedImageData: ImageData | null;
+
+  // Zoom and pan
+  inputZoom: number;
+  outputZoom: number;
+  inputPan: { x: number; y: number };
+  outputPan: { x: number; y: number };
 }
 
 const state: AppState = {
@@ -109,6 +123,20 @@ const state: AppState = {
   bgColor: null,
   bgTolerance: 10,
   eyedropperActive: false,
+
+  // Pixel grid overlay
+  pixelGridVisible: false,
+  detectedScale: null,
+
+  // Output preview
+  outputGridVisible: false,
+  processedImageData: null,
+
+  // Zoom and pan
+  inputZoom: 1,
+  outputZoom: 1,
+  inputPan: { x: 0, y: 0 },
+  outputPan: { x: 0, y: 0 },
 };
 
 // Conversion factor: 1 inch = 25.4mm
@@ -127,6 +155,14 @@ const elements = {
   imageDimensions: document.getElementById('image-dimensions') as HTMLSpanElement,
   imageFilename: document.getElementById('image-filename') as HTMLSpanElement,
   clearImageBtn: document.getElementById('clear-image-btn') as HTMLButtonElement,
+  pixelGridToggle: document.getElementById('pixel-grid-toggle') as HTMLInputElement,
+  pixelGridOverlay: document.getElementById('pixel-grid-overlay') as HTMLCanvasElement,
+
+  // Output preview
+  outputPreviewImage: document.getElementById('output-preview-image') as HTMLImageElement,
+  outputDimensions: document.getElementById('output-dimensions') as HTMLSpanElement,
+  outputGridToggle: document.getElementById('output-grid-toggle') as HTMLInputElement,
+  outputGridOverlay: document.getElementById('output-grid-overlay') as HTMLCanvasElement,
 
   // Background removal
   bgRemoveToggle: document.getElementById('bg-remove-toggle') as HTMLInputElement,
@@ -199,6 +235,134 @@ function formatDimension(valueMm: number, unit: 'mm' | 'inches'): string {
   return unit === 'inches' ? value.toFixed(2) : value.toFixed(1);
 }
 
+/**
+ * Converts ImageData to a data URL for displaying in an img element.
+ */
+function imageDataToDataURL(imageData: ImageData): string {
+  const canvas = document.createElement('canvas');
+  canvas.width = imageData.width;
+  canvas.height = imageData.height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Failed to get canvas context');
+  ctx.putImageData(imageData, 0, 0);
+  return canvas.toDataURL('image/png');
+}
+
+/**
+ * Updates the image preview to show the given ImageData.
+ */
+function updateImagePreview(imageData: ImageData): void {
+  const dataURL = imageDataToDataURL(imageData);
+  elements.previewImage.src = dataURL;
+}
+
+/**
+ * Draws the pixel grid overlay based on detected scale.
+ * The canvas matches the image dimensions and follows the same CSS transform.
+ */
+function updatePixelGridOverlay(): void {
+  const canvas = elements.pixelGridOverlay;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  if (!state.pixelGridVisible || !state.detectedScale || !state.originalImageData) {
+    canvas.classList.remove('visible');
+    return;
+  }
+
+  canvas.classList.add('visible');
+
+  const { scaleX, scaleY, offsetX, offsetY } = state.detectedScale;
+  const { width: imgWidth, height: imgHeight } = state.originalImageData;
+
+  // Set canvas size to match original image dimensions
+  canvas.width = imgWidth;
+  canvas.height = imgHeight;
+
+  // Apply the same transform as the image
+  canvas.style.transform = `translate(${state.inputPan.x}px, ${state.inputPan.y}px) scale(${state.inputZoom})`;
+
+  // Clear and draw
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
+  ctx.lineWidth = 1;
+
+  // Draw grid lines at original image scale
+  // Vertical lines
+  for (let x = offsetX; x <= imgWidth; x += scaleX) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, imgHeight);
+    ctx.stroke();
+  }
+
+  // Horizontal lines
+  for (let y = offsetY; y <= imgHeight; y += scaleY) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(imgWidth, y);
+    ctx.stroke();
+  }
+}
+
+/**
+ * Updates the output image preview to show the processed ImageData.
+ */
+function updateOutputPreview(imageData: ImageData): void {
+  state.processedImageData = imageData;
+  const dataURL = imageDataToDataURL(imageData);
+  elements.outputPreviewImage.src = dataURL;
+  elements.outputDimensions.textContent = `${imageData.width} x ${imageData.height} px`;
+}
+
+/**
+ * Draws the pixel grid overlay for the output image (1 pixel = 1 cell).
+ * The canvas matches the image dimensions and follows the same CSS transform.
+ */
+function updateOutputGridOverlay(): void {
+  const canvas = elements.outputGridOverlay;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  if (!state.outputGridVisible || !state.processedImageData) {
+    canvas.classList.remove('visible');
+    return;
+  }
+
+  canvas.classList.add('visible');
+
+  const { width: imgWidth, height: imgHeight } = state.processedImageData;
+
+  // Set canvas size to match processed image dimensions
+  canvas.width = imgWidth;
+  canvas.height = imgHeight;
+
+  // Apply the same transform as the image
+  canvas.style.transform = `translate(${state.outputPan.x}px, ${state.outputPan.y}px) scale(${state.outputZoom})`;
+
+  // Clear and draw
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
+  ctx.lineWidth = 1;
+
+  // Draw grid lines - each pixel is one cell
+  // Vertical lines
+  for (let x = 0; x <= imgWidth; x++) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, imgHeight);
+    ctx.stroke();
+  }
+
+  // Horizontal lines
+  for (let y = 0; y <= imgHeight; y++) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(imgWidth, y);
+    ctx.stroke();
+  }
+}
+
 function showStatus(message: string, type: 'success' | 'error'): void {
   elements.exportStatus.textContent = message;
   elements.exportStatus.className = `status-message visible ${type}`;
@@ -254,6 +418,9 @@ async function processImage(): Promise<void> {
   // Supports non-uniform scaling where X and Y may have different scale factors
   const { targetWidth, targetHeight, scaleX, scaleY, offsetX, offsetY } = getOptimalDimensions(state.originalImageData);
 
+  // Store detected scale for pixel grid overlay
+  state.detectedScale = { scaleX, scaleY, offsetX, offsetY };
+
   let imageDataToProcess = state.originalImageData;
   const { width, height } = imageDataToProcess;
 
@@ -278,11 +445,20 @@ async function processImage(): Promise<void> {
       color: state.bgColor,
       tolerance: state.bgTolerance,
     });
+    // Update the image preview with background removed from ORIGINAL image (not downscaled)
+    const previewImageData = removeBackground(state.originalImageData, {
+      color: state.bgColor,
+      tolerance: state.bgTolerance,
+    });
+    updateImagePreview(previewImageData);
   }
 
   // Extract colors from the processed image, optionally merging similar colors
   const threshold = state.colorMergeEnabled ? state.colorMergeThreshold : 0;
   state.quantizedResult = quantizeColors(imageDataToProcess, threshold);
+
+  // Update output preview with the processed image
+  updateOutputPreview(imageDataToProcess);
 
   // Update color palette display
   updateColorPalette();
@@ -595,7 +771,157 @@ function setupEventListeners(): void {
     elements.imagePreview.classList.remove('eyedropper-mode');
     elements.bgColorPreview.style.backgroundColor = '';
     elements.bgColorPreview.classList.remove('has-color');
+
+    // Reset pixel grid
+    state.detectedScale = null;
+    state.pixelGridVisible = false;
+    elements.pixelGridToggle.checked = false;
+    elements.pixelGridOverlay.classList.remove('visible');
+
+    // Reset output preview
+    state.processedImageData = null;
+    state.outputGridVisible = false;
+    elements.outputGridToggle.checked = false;
+    elements.outputGridOverlay.classList.remove('visible');
+    elements.outputPreviewImage.src = '';
+    elements.outputDimensions.textContent = '-- x -- px';
+
+    // Reset zoom and pan
+    state.inputZoom = 1;
+    state.outputZoom = 1;
+    state.inputPan = { x: 0, y: 0 };
+    state.outputPan = { x: 0, y: 0 };
+    elements.previewImage.style.transform = 'translate(0px, 0px) scale(1)';
+    elements.outputPreviewImage.style.transform = 'translate(0px, 0px) scale(1)';
   });
+
+  // Pixel grid toggle
+  elements.pixelGridToggle.addEventListener('change', () => {
+    state.pixelGridVisible = elements.pixelGridToggle.checked;
+    updatePixelGridOverlay();
+  });
+
+  // Update pixel grid when image loads or resizes
+  elements.previewImage.addEventListener('load', () => {
+    if (state.pixelGridVisible) {
+      requestAnimationFrame(() => updatePixelGridOverlay());
+    }
+  });
+
+  // Output grid toggle
+  elements.outputGridToggle.addEventListener('change', () => {
+    state.outputGridVisible = elements.outputGridToggle.checked;
+    updateOutputGridOverlay();
+  });
+
+  // Update output grid when image loads
+  elements.outputPreviewImage.addEventListener('load', () => {
+    if (state.outputGridVisible) {
+      requestAnimationFrame(() => updateOutputGridOverlay());
+    }
+  });
+
+  // Scroll to zoom on input image
+  elements.previewImage.parentElement?.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    state.inputZoom = Math.max(0.5, Math.min(10, state.inputZoom * delta));
+    elements.previewImage.style.transform = `translate(${state.inputPan.x}px, ${state.inputPan.y}px) scale(${state.inputZoom})`;
+    if (state.pixelGridVisible) {
+      requestAnimationFrame(() => updatePixelGridOverlay());
+    }
+  }, { passive: false });
+
+  // Scroll to zoom on output image
+  elements.outputPreviewImage.parentElement?.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    state.outputZoom = Math.max(0.5, Math.min(10, state.outputZoom * delta));
+    elements.outputPreviewImage.style.transform = `translate(${state.outputPan.x}px, ${state.outputPan.y}px) scale(${state.outputZoom})`;
+    if (state.outputGridVisible) {
+      requestAnimationFrame(() => updateOutputGridOverlay());
+    }
+  }, { passive: false });
+
+  // Drag to pan on input image
+  let inputDragging = false;
+  let inputDragStart = { x: 0, y: 0 };
+
+  // Prevent native image dragging
+  elements.previewImage.addEventListener('dragstart', (e) => e.preventDefault());
+  elements.outputPreviewImage.addEventListener('dragstart', (e) => e.preventDefault());
+
+  const inputContainer = elements.previewImage.parentElement;
+  if (inputContainer) {
+    inputContainer.addEventListener('mousedown', (e) => {
+      // Don't start drag if eyedropper is active
+      if (state.eyedropperActive) return;
+      e.preventDefault(); // Prevent text selection and image drag
+      inputDragging = true;
+      inputDragStart = { x: e.clientX - state.inputPan.x, y: e.clientY - state.inputPan.y };
+      inputContainer.style.cursor = 'grabbing';
+    });
+
+    inputContainer.addEventListener('mousemove', (e) => {
+      if (!inputDragging) return;
+      state.inputPan.x = e.clientX - inputDragStart.x;
+      state.inputPan.y = e.clientY - inputDragStart.y;
+      elements.previewImage.style.transform = `translate(${state.inputPan.x}px, ${state.inputPan.y}px) scale(${state.inputZoom})`;
+      if (state.pixelGridVisible) {
+        requestAnimationFrame(() => updatePixelGridOverlay());
+      }
+    });
+
+    inputContainer.addEventListener('mouseup', () => {
+      inputDragging = false;
+      inputContainer.style.cursor = 'grab';
+    });
+
+    inputContainer.addEventListener('mouseleave', () => {
+      inputDragging = false;
+      inputContainer.style.cursor = 'grab';
+    });
+
+    // Set default cursor
+    inputContainer.style.cursor = 'grab';
+  }
+
+  // Drag to pan on output image
+  let outputDragging = false;
+  let outputDragStart = { x: 0, y: 0 };
+
+  const outputContainer = elements.outputPreviewImage.parentElement;
+  if (outputContainer) {
+    outputContainer.addEventListener('mousedown', (e) => {
+      e.preventDefault(); // Prevent text selection and image drag
+      outputDragging = true;
+      outputDragStart = { x: e.clientX - state.outputPan.x, y: e.clientY - state.outputPan.y };
+      outputContainer.style.cursor = 'grabbing';
+    });
+
+    outputContainer.addEventListener('mousemove', (e) => {
+      if (!outputDragging) return;
+      state.outputPan.x = e.clientX - outputDragStart.x;
+      state.outputPan.y = e.clientY - outputDragStart.y;
+      elements.outputPreviewImage.style.transform = `translate(${state.outputPan.x}px, ${state.outputPan.y}px) scale(${state.outputZoom})`;
+      if (state.outputGridVisible) {
+        requestAnimationFrame(() => updateOutputGridOverlay());
+      }
+    });
+
+    outputContainer.addEventListener('mouseup', () => {
+      outputDragging = false;
+      outputContainer.style.cursor = 'grab';
+    });
+
+    outputContainer.addEventListener('mouseleave', () => {
+      outputDragging = false;
+      outputContainer.style.cursor = 'grab';
+    });
+
+    // Set default cursor
+    outputContainer.style.cursor = 'grab';
+  }
 
   // Background removal toggle
   elements.bgRemoveToggle.addEventListener('change', () => {
@@ -609,6 +935,10 @@ function setupEventListeners(): void {
       state.eyedropperActive = false;
       elements.eyedropperBtn.classList.remove('active');
       elements.imagePreview.classList.remove('eyedropper-mode');
+      // Restore original image preview when background removal is disabled
+      if (state.originalImageData) {
+        updateImagePreview(state.originalImageData);
+      }
     }
 
     if (state.originalImageData && state.bgColor) {

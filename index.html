@@ -38,9 +38,45 @@
             </div>
 
             <div class="image-preview" id="image-preview">
-              <img id="preview-image" src="" alt="Uploaded pixel art preview" />
+              <div class="image-previews-row">
+                <!-- Input Image Preview -->
+                <div class="image-preview-panel">
+                  <div class="image-preview-label">Input</div>
+                  <div class="image-preview-container">
+                    <img id="preview-image" src="" alt="Uploaded pixel art preview" />
+                    <canvas id="pixel-grid-overlay" class="pixel-grid-overlay"></canvas>
+                  </div>
+                  <div class="image-info">
+                    <span id="image-dimensions">-- x -- px</span>
+                  </div>
+                  <div class="image-preview-controls">
+                    <label class="toggle-label">
+                      <input type="checkbox" id="pixel-grid-toggle" />
+                      <span>Show grid</span>
+                    </label>
+                  </div>
+                </div>
+
+                <!-- Output Image Preview -->
+                <div class="image-preview-panel">
+                  <div class="image-preview-label">Output</div>
+                  <div class="image-preview-container">
+                    <img id="output-preview-image" src="" alt="Processed pixel art preview" />
+                    <canvas id="output-grid-overlay" class="pixel-grid-overlay"></canvas>
+                  </div>
+                  <div class="image-info">
+                    <span id="output-dimensions">-- x -- px</span>
+                  </div>
+                  <div class="image-preview-controls">
+                    <label class="toggle-label">
+                      <input type="checkbox" id="output-grid-toggle" />
+                      <span>Show grid</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
               <div class="image-info">
-                <span id="image-dimensions">-- x -- px</span>
                 <span id="image-filename">--</span>
               </div>
               <button type="button" class="canvas-control-btn" id="clear-image-btn">
