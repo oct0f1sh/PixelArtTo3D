@@ -72,6 +72,8 @@ interface AppState {
   colorReduceEnabled: boolean;
   colorReduceTarget: number;
   originalColorCount: number;
+  manuallyDeletedColors: Array<{ color: { r: number; g: number; b: number; hex: string }; pixels: Array<{ x: number; y: number }> }>;
+  autoDeletedColors: Array<{ color: { r: number; g: number; b: number; hex: string }; pixels: Array<{ x: number; y: number }> }>;
   keyholeEnabled: boolean;
   keyholePosition: 'top-left' | 'top-center' | 'top-right';
   exportFormat: 'stl' | '3mf';
@@ -108,13 +110,15 @@ const state: AppState = {
   unit: 'mm',
   setDimension: 'width',
   dimensionValue: 50,
-  pixelHeight: 2,
+  pixelHeight: 1,
   baseEnabled: true,
-  baseHeight: 1,
+  baseHeight: 2,
   baseColor: '#000000',
   colorReduceEnabled: false,
   colorReduceTarget: 8,
   originalColorCount: 0,
+  manuallyDeletedColors: [],
+  autoDeletedColors: [],
   keyholeEnabled: false,
   keyholePosition: 'top-center',
   exportFormat: '3mf',
@@ -210,6 +214,8 @@ const elements = {
   colorReduceOptions: document.getElementById('color-reduce-options') as HTMLDivElement,
   colorReduceSlider: document.getElementById('color-reduce-slider') as HTMLInputElement,
   colorReduceInput: document.getElementById('color-reduce-value') as HTMLInputElement,
+  colorReduceDecrement: document.getElementById('color-reduce-decrement') as HTMLButtonElement,
+  colorReduceIncrement: document.getElementById('color-reduce-increment') as HTMLButtonElement,
 
   // Export
   formatToggle: document.getElementById('format-toggle') as HTMLDivElement,
@@ -698,6 +704,9 @@ async function handleImageFile(file: File): Promise<void> {
 async function processImage(): Promise<void> {
   if (!state.originalImageData) return;
 
+  // Clear auto-deleted colors when reprocessing (keep manually deleted ones)
+  state.autoDeletedColors = [];
+
   // Detect optimal dimensions (handles upscaled pixel art and large images)
   // Supports non-uniform scaling where X and Y may have different scale factors
   const { targetWidth, targetHeight, scaleX, scaleY, offsetX, offsetY } = getOptimalDimensions(state.originalImageData);
@@ -753,6 +762,30 @@ async function processImage(): Promise<void> {
   // Apply color reduction if enabled and target is less than original
   if (state.colorReduceEnabled && state.colorReduceTarget < state.originalColorCount) {
     state.quantizedResult = quantizeColors(imageDataToProcess, state.colorReduceTarget);
+
+    // Track which colors were removed so they can be restored with + button
+    // Compare full palette with reduced palette to find removed colors
+    const reducedHexes = new Set(state.quantizedResult.palette.map(c => c.hex));
+    const manualHexes = new Set(state.manuallyDeletedColors.map(d => d.color.hex));
+    for (const color of fullResult.palette) {
+      // Skip if already in reduced palette or manually deleted
+      if (!reducedHexes.has(color.hex) && !manualHexes.has(color.hex)) {
+        // Find pixel positions for this removed color in the full result
+        const pixelPositions: Array<{ x: number; y: number }> = [];
+        for (let y = 0; y < fullResult.pixels.length; y++) {
+          for (let x = 0; x < fullResult.pixels[y].length; x++) {
+            const idx = fullResult.pixels[y][x];
+            if (idx >= 0 && fullResult.palette[idx].hex === color.hex) {
+              pixelPositions.push({ x, y });
+            }
+          }
+        }
+        state.autoDeletedColors.push({
+          color: { r: color.r, g: color.g, b: color.b, hex: color.hex },
+          pixels: pixelPositions,
+        });
+      }
+    }
   } else {
     state.quantizedResult = fullResult;
   }
@@ -809,8 +842,12 @@ function updateColorPalette(): void {
     </div>
   ` : '';
 
+  // Only show delete button if there's more than one color
+  const showDelete = palette.length > 1;
+
   const colorSwatchesHtml = palette.map((color, index) => `
-    <div class="color-swatch">
+    <div class="color-swatch" data-color-index="${index}">
+      ${showDelete ? `<button type="button" class="color-delete-btn" data-delete-index="${index}" title="Remove color">×</button>` : ''}
       <div class="color-swatch-preview" style="background-color: ${color.hex}"></div>
       <div class="color-swatch-hex">${color.hex}</div>
       <div class="color-swatch-name">color_${index + 1}</div>
@@ -818,6 +855,169 @@ function updateColorPalette(): void {
   `).join('');
 
   elements.colorPalette.innerHTML = baseSwatchHtml + colorSwatchesHtml;
+
+  // Add click handlers for delete buttons
+  if (showDelete) {
+    elements.colorPalette.querySelectorAll('.color-delete-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const index = parseInt((btn as HTMLElement).dataset.deleteIndex || '0');
+        removeColorFromPalette(index);
+      });
+    });
+  }
+}
+
+/**
+ * Removes a color from the palette and remaps all pixels using that color
+ * to the nearest remaining color. Stores the removed color for potential restoration.
+ */
+function removeColorFromPalette(indexToRemove: number): void {
+  if (!state.quantizedResult) return;
+
+  const { palette, pixels } = state.quantizedResult;
+
+  // Can't remove if only one color left
+  if (palette.length <= 1) return;
+
+  // Store the color being removed along with pixel positions that use it
+  const removedColor = palette[indexToRemove];
+  const pixelPositions: Array<{ x: number; y: number }> = [];
+
+  for (let y = 0; y < pixels.length; y++) {
+    for (let x = 0; x < pixels[y].length; x++) {
+      if (pixels[y][x] === indexToRemove) {
+        pixelPositions.push({ x, y });
+      }
+    }
+  }
+
+  // Save to manually deleted colors stack (priority for restoration)
+  state.manuallyDeletedColors.push({
+    color: { r: removedColor.r, g: removedColor.g, b: removedColor.b, hex: removedColor.hex },
+    pixels: pixelPositions,
+  });
+
+  // Find nearest color to the one being removed
+  let nearestIndex = -1;
+  let nearestDistance = Infinity;
+
+  for (let i = 0; i < palette.length; i++) {
+    if (i === indexToRemove) continue;
+
+    const c = palette[i];
+    const dr = removedColor.r - c.r;
+    const dg = removedColor.g - c.g;
+    const db = removedColor.b - c.b;
+    const distance = dr * dr + dg * dg + db * db;
+
+    if (distance < nearestDistance) {
+      nearestDistance = distance;
+      nearestIndex = i;
+    }
+  }
+
+  // Remap pixels: update indices in the pixel grid
+  for (let y = 0; y < pixels.length; y++) {
+    for (let x = 0; x < pixels[y].length; x++) {
+      const currentIndex = pixels[y][x];
+      if (currentIndex === indexToRemove) {
+        // Remap to nearest color (adjust for upcoming removal)
+        pixels[y][x] = nearestIndex > indexToRemove ? nearestIndex - 1 : nearestIndex;
+      } else if (currentIndex > indexToRemove && currentIndex !== -1) {
+        // Shift indices down for colors after the removed one
+        pixels[y][x] = currentIndex - 1;
+      }
+    }
+  }
+
+  // Remove the color from the palette
+  palette.splice(indexToRemove, 1);
+
+  // Update the quantized result (preserve width and height)
+  state.quantizedResult = {
+    palette,
+    pixels,
+    width: state.quantizedResult.width,
+    height: state.quantizedResult.height,
+  };
+
+  // Update slider/input value to match current palette size (but don't change max)
+  state.colorReduceTarget = palette.length;
+  elements.colorReduceSlider.value = String(palette.length);
+  elements.colorReduceInput.value = String(palette.length);
+
+  // Update all previews
+  updateAllPreviews();
+}
+
+/**
+ * Restores the most recently deleted color back to the palette.
+ * Prioritizes manually deleted colors (X button) over auto-deleted (slider).
+ */
+function restoreColorToPalette(): void {
+  if (!state.quantizedResult) return;
+
+  // Prioritize manually deleted colors, then auto-deleted
+  let restored;
+  if (state.manuallyDeletedColors.length > 0) {
+    restored = state.manuallyDeletedColors.pop()!;
+  } else if (state.autoDeletedColors.length > 0) {
+    restored = state.autoDeletedColors.pop()!;
+  } else {
+    return; // Nothing to restore
+  }
+
+  const { palette, pixels } = state.quantizedResult;
+
+  // Add the color back to the palette
+  const newIndex = palette.length;
+  palette.push({
+    r: restored.color.r,
+    g: restored.color.g,
+    b: restored.color.b,
+    hex: restored.color.hex,
+  });
+
+  // Restore pixel positions
+  for (const pos of restored.pixels) {
+    if (pos.y < pixels.length && pos.x < pixels[pos.y].length) {
+      pixels[pos.y][pos.x] = newIndex;
+    }
+  }
+
+  // Update the quantized result
+  state.quantizedResult = {
+    palette,
+    pixels,
+    width: state.quantizedResult.width,
+    height: state.quantizedResult.height,
+  };
+
+  // Update slider/input value to match current palette size
+  state.colorReduceTarget = palette.length;
+  elements.colorReduceSlider.value = String(palette.length);
+  elements.colorReduceInput.value = String(palette.length);
+
+  // Update all previews
+  updateAllPreviews();
+}
+
+/**
+ * Updates all previews (output image, grid overlay, color palette, 3D view)
+ */
+function updateAllPreviews(): void {
+  if (!state.quantizedResult) return;
+
+  const quantizedImageData = quantizedResultToImageData(state.quantizedResult);
+  updateOutputPreview(quantizedImageData);
+
+  if (state.outputGridVisible) {
+    requestAnimationFrame(() => updateOutputGridOverlay());
+  }
+
+  updateColorPalette();
+  generateAndDisplay3D();
 }
 
 function updateDimensionsDisplay(): void {
@@ -1582,6 +1782,41 @@ function setupEventListeners(): void {
     if (state.originalImageData && state.colorReduceEnabled) {
       processImage();
     }
+  });
+
+  // Color reduce decrement button - removes one color at a time
+  elements.colorReduceDecrement.addEventListener('click', () => {
+    if (!state.quantizedResult || !state.colorReduceEnabled) return;
+    if (state.quantizedResult.palette.length <= 2) return;
+
+    // Find the two closest colors and remove the less common one
+    const { palette } = state.quantizedResult;
+    let minDistance = Infinity;
+    let removeIndex = palette.length - 1;
+
+    for (let i = 0; i < palette.length; i++) {
+      for (let j = i + 1; j < palette.length; j++) {
+        const dr = palette[i].r - palette[j].r;
+        const dg = palette[i].g - palette[j].g;
+        const db = palette[i].b - palette[j].b;
+        const distance = dr * dr + dg * dg + db * db;
+
+        if (distance < minDistance) {
+          minDistance = distance;
+          removeIndex = j; // Remove higher index (typically less common)
+        }
+      }
+    }
+
+    removeColorFromPalette(removeIndex);
+  });
+
+  // Color reduce increment button - restores last deleted color
+  elements.colorReduceIncrement.addEventListener('click', () => {
+    if (!state.quantizedResult || !state.colorReduceEnabled) return;
+    if (state.manuallyDeletedColors.length === 0 && state.autoDeletedColors.length === 0) return;
+
+    restoreColorToPalette();
   });
 
   // Reset view button

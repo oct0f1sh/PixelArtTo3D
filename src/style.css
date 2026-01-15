@@ -169,6 +169,7 @@ body {
 }
 
 .panel-header h2 {
+  flex: 1;
   font-size: 0.8rem;
   font-weight: 600;
   letter-spacing: 0.05em;
@@ -187,6 +188,7 @@ body {
   font-size: 0.65rem;
   font-weight: 600;
   letter-spacing: 0.02em;
+  margin-right: var(--spacing-sm);
 }
 
 /* Collapse Icon */
@@ -577,6 +579,78 @@ select {
   -moz-appearance: textfield;
 }
 
+/* Stepper Input */
+.stepper-input {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+.stepper-btn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.stepper-btn:first-child {
+  border-radius: var(--radius-xs) 0 0 var(--radius-xs);
+  border-right: none;
+}
+
+.stepper-btn:last-child {
+  border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
+  border-left: none;
+}
+
+.stepper-btn:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.stepper-btn:active {
+  background-color: var(--accent);
+  color: white;
+}
+
+.stepper-value {
+  width: 40px;
+  height: 24px;
+  padding: 0 var(--spacing-xs);
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 0;
+  text-align: center;
+  font-size: 0.8rem;
+  font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+  color: var(--accent-hover);
+  font-weight: 500;
+}
+
+.stepper-value:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.stepper-value::-webkit-inner-spin-button,
+.stepper-value::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.stepper-value[type="number"] {
+  -moz-appearance: textfield;
+}
+
 /* ================================================
    Toggle Group
    ================================================ */
@@ -836,6 +910,7 @@ input[type="color"]::-moz-color-swatch {
 }
 
 .color-swatch {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -843,14 +918,32 @@ input[type="color"]::-moz-color-swatch {
   background-color: var(--bg-tertiary);
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
-  transition: all var(--transition-fast);
   cursor: default;
 }
 
-.color-swatch:hover {
-  border-color: var(--accent);
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-glow);
+.color-delete-btn {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--bg-hover);
+  border: none;
+  border-radius: 50%;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.color-delete-btn:hover {
+  background-color: var(--error);
+  color: white;
 }
 
 .color-swatch-preview {
