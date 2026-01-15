@@ -257,6 +257,45 @@ function updateImagePreview(imageData: ImageData): void {
 }
 
 /**
+ * Creates an ImageData from a quantized result (palette + pixel grid).
+ * This shows the image with merged colors applied.
+ */
+function quantizedResultToImageData(result: QuantizedResult): ImageData {
+  const { palette, pixels, width, height } = result;
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Failed to get canvas context');
+
+  const imageData = ctx.createImageData(width, height);
+  const data = imageData.data;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const colorIndex = pixels[y][x];
+      const idx = (y * width + x) * 4;
+
+      if (colorIndex === -1) {
+        // Transparent pixel
+        data[idx] = 0;
+        data[idx + 1] = 0;
+        data[idx + 2] = 0;
+        data[idx + 3] = 0;
+      } else {
+        const color = palette[colorIndex];
+        data[idx] = color.r;
+        data[idx + 1] = color.g;
+        data[idx + 2] = color.b;
+        data[idx + 3] = 255;
+      }
+    }
+  }
+
+  return imageData;
+}
+
+/**
  * Draws the pixel grid overlay based on detected scale.
  * Grid is drawn at screen resolution and stays sharp during zoom/pan.
  */
@@ -532,8 +571,19 @@ async function processImage(): Promise<void> {
   const threshold = state.colorMergeEnabled ? state.colorMergeThreshold : 0;
   state.quantizedResult = quantizeColors(imageDataToProcess, threshold);
 
-  // Update output preview with the processed image
-  updateOutputPreview(imageDataToProcess);
+  // Update output preview with the quantized image (shows merged colors)
+  const quantizedImageData = quantizedResultToImageData(state.quantizedResult);
+  updateOutputPreview(quantizedImageData);
+
+  // Match output zoom to input zoom so both appear at same scale
+  state.outputZoom = state.inputZoom;
+  state.outputPan = { x: 0, y: 0 };
+  elements.outputPreviewImage.style.transform = `translate(0px, 0px) scale(${state.outputZoom})`;
+
+  // Update grid overlay if visible
+  if (state.outputGridVisible) {
+    requestAnimationFrame(() => updateOutputGridOverlay());
+  }
 
   // Update color palette display
   updateColorPalette();
