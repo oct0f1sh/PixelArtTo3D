@@ -11,6 +11,22 @@ import { generateMeshes, rotateForPrinting, type MeshResult } from './meshGenera
 import { exportSTL, export3MF } from './exporter';
 import type { QuantizedResult, PixelGrid } from './types';
 
+// Google Analytics type declaration
+declare global {
+  interface Window {
+    gtag?: (...args: unknown[]) => void;
+  }
+}
+
+/**
+ * Track an event with Google Analytics
+ */
+function trackEvent(eventName: string, params?: Record<string, string | number | boolean>): void {
+  if (window.gtag) {
+    window.gtag('event', eventName, params);
+  }
+}
+
 /**
  * Calculates the bounding box of non-transparent pixels in the grid.
  * Returns the content dimensions (excluding transparent border).
@@ -664,6 +680,12 @@ function updateBgColorPreview(color: { r: number; g: number; b: number } | null)
 
 async function handleImageFile(file: File): Promise<void> {
   try {
+    // Track image upload
+    trackEvent('image_upload', {
+      file_type: file.type,
+      file_size_kb: Math.round(file.size / 1024)
+    });
+
     // Store original file and load image data
     state.originalFile = file;
     state.originalImageData = await loadImage(file);
@@ -1194,6 +1216,10 @@ async function handleExport(): Promise<void> {
     if (state.exportFormat === 'stl') {
       exportSTL(rotatedGeometries, filename);
       showStatus('STL file downloaded successfully!', 'success');
+      trackEvent('export', {
+        format: 'stl',
+        color_count: state.quantizedResult?.palette.length || 0
+      });
 
     } else {
       // 3MF export with base mesh and color layers
@@ -1204,6 +1230,10 @@ async function handleExport(): Promise<void> {
         filename
       );
       showStatus('3MF file downloaded successfully!', 'success');
+      trackEvent('export', {
+        format: '3mf',
+        color_count: state.quantizedResult?.palette.length || 0
+      });
     }
   } catch (error) {
     console.error('Export failed:', error);
@@ -1449,6 +1479,7 @@ function setupEventListeners(): void {
 
   elements.bgRemoveToggle.addEventListener('change', () => {
     state.bgRemoveEnabled = elements.bgRemoveToggle.checked;
+    trackEvent('feature_toggle', { feature: 'background_removal', enabled: state.bgRemoveEnabled });
 
     // Toggle color picker disabled state
     if (bgColorInline) {
@@ -1700,6 +1731,7 @@ function setupEventListeners(): void {
   // Keyhole toggle
   elements.keyholeToggle.addEventListener('change', () => {
     state.keyholeEnabled = elements.keyholeToggle.checked;
+    trackEvent('feature_toggle', { feature: 'keyhole', enabled: state.keyholeEnabled });
 
     if (state.keyholeEnabled) {
       elements.keyholeOptions.classList.add('visible');
@@ -1735,6 +1767,7 @@ function setupEventListeners(): void {
   // Color reduce toggle
   elements.colorReduceToggle.addEventListener('change', () => {
     state.colorReduceEnabled = elements.colorReduceToggle.checked;
+    trackEvent('feature_toggle', { feature: 'color_reduction', enabled: state.colorReduceEnabled });
 
     if (state.colorReduceEnabled) {
       elements.colorReduceOptions.classList.add('visible');
