@@ -296,6 +296,41 @@ function quantizedResultToImageData(result: QuantizedResult): ImageData {
 }
 
 /**
+ * Calculate the actual displayed size of an image with object-fit: contain.
+ * Returns the rendered width and height within the container.
+ */
+function getContainedImageSize(
+  img: HTMLImageElement,
+  container: HTMLElement
+): { width: number; height: number } {
+  const containerWidth = container.clientWidth;
+  const containerHeight = container.clientHeight;
+  const imgNaturalWidth = img.naturalWidth;
+  const imgNaturalHeight = img.naturalHeight;
+
+  if (!imgNaturalWidth || !imgNaturalHeight) {
+    return { width: containerWidth, height: containerHeight };
+  }
+
+  const containerAspect = containerWidth / containerHeight;
+  const imageAspect = imgNaturalWidth / imgNaturalHeight;
+
+  if (imageAspect > containerAspect) {
+    // Image is wider relative to container, scale based on width
+    return {
+      width: containerWidth,
+      height: containerWidth / imageAspect,
+    };
+  } else {
+    // Image is taller relative to container, scale based on height
+    return {
+      width: containerHeight * imageAspect,
+      height: containerHeight,
+    };
+  }
+}
+
+/**
  * Draws the pixel grid overlay based on detected scale.
  * Grid is drawn at screen resolution and stays sharp during zoom/pan.
  */
@@ -333,9 +368,10 @@ function updatePixelGridOverlay(): void {
 
   const { scaleX, scaleY, offsetX, offsetY } = state.detectedScale;
 
-  // Get the image's layout size (before CSS transform) using offsetWidth/Height
-  const baseDisplayWidth = img.offsetWidth;
-  const baseDisplayHeight = img.offsetHeight;
+  // Get the actual displayed image size (accounting for object-fit: contain)
+  const containedSize = getContainedImageSize(img, container);
+  const baseDisplayWidth = containedSize.width;
+  const baseDisplayHeight = containedSize.height;
 
   // Apply zoom
   const displayWidth = baseDisplayWidth * state.inputZoom;
@@ -430,9 +466,10 @@ function updateOutputGridOverlay(): void {
   canvas.height = containerRect.height;
   canvas.style.transform = 'none';
 
-  // Get the image's layout size (before CSS transform) using offsetWidth/Height
-  const baseDisplayWidth = img.offsetWidth;
-  const baseDisplayHeight = img.offsetHeight;
+  // Get the actual displayed image size (accounting for object-fit: contain)
+  const containedSize = getContainedImageSize(img, container);
+  const baseDisplayWidth = containedSize.width;
+  const baseDisplayHeight = containedSize.height;
 
   // Apply zoom
   const displayWidth = baseDisplayWidth * state.outputZoom;
@@ -490,6 +527,130 @@ function showStatus(message: string, type: 'success' | 'error'): void {
 
 
 // ============================================================================
+// Background Color Detection
+// ============================================================================
+
+/**
+ * Guesses the background color by analyzing edge pixels of the image.
+ * Samples colors from all four edges and finds the most common color.
+ * Also checks corners for additional confidence.
+ */
+function guessBackgroundColor(imageData: ImageData): { r: number; g: number; b: number } | null {
+  const { data, width, height } = imageData;
+
+  // Helper to get pixel color at x, y
+  function getPixel(x: number, y: number): { r: number; g: number; b: number; a: number } {
+    const idx = (y * width + x) * 4;
+    return {
+      r: data[idx],
+      g: data[idx + 1],
+      b: data[idx + 2],
+      a: data[idx + 3]
+    };
+  }
+
+  // Helper to create a color key for counting
+  function colorKey(r: number, g: number, b: number): string {
+    // Quantize to reduce slight variations (group similar colors)
+    const qr = Math.round(r / 8) * 8;
+    const qg = Math.round(g / 8) * 8;
+    const qb = Math.round(b / 8) * 8;
+    return `${qr},${qg},${qb}`;
+  }
+
+  const colorCounts = new Map<string, { count: number; r: number; g: number; b: number }>();
+
+  // Sample edge pixels
+  const edgePixels: { x: number; y: number }[] = [];
+
+  // Top and bottom edges
+  for (let x = 0; x < width; x++) {
+    edgePixels.push({ x, y: 0 });
+    edgePixels.push({ x, y: height - 1 });
+  }
+
+  // Left and right edges (excluding corners already added)
+  for (let y = 1; y < height - 1; y++) {
+    edgePixels.push({ x: 0, y });
+    edgePixels.push({ x: width - 1, y });
+  }
+
+  // Count colors from edge pixels
+  for (const { x, y } of edgePixels) {
+    const pixel = getPixel(x, y);
+
+    // Skip fully transparent pixels
+    if (pixel.a < 128) continue;
+
+    const key = colorKey(pixel.r, pixel.g, pixel.b);
+    const existing = colorCounts.get(key);
+
+    if (existing) {
+      existing.count++;
+      // Average the actual colors for this bucket
+      existing.r = Math.round((existing.r * (existing.count - 1) + pixel.r) / existing.count);
+      existing.g = Math.round((existing.g * (existing.count - 1) + pixel.g) / existing.count);
+      existing.b = Math.round((existing.b * (existing.count - 1) + pixel.b) / existing.count);
+    } else {
+      colorCounts.set(key, { count: 1, r: pixel.r, g: pixel.g, b: pixel.b });
+    }
+  }
+
+  // Find the most common color
+  let maxCount = 0;
+  let bgColor: { r: number; g: number; b: number } | null = null;
+
+  for (const [, value] of colorCounts) {
+    if (value.count > maxCount) {
+      maxCount = value.count;
+      bgColor = { r: value.r, g: value.g, b: value.b };
+    }
+  }
+
+  // Validate: check if corners mostly match this color
+  if (bgColor) {
+    const corners = [
+      getPixel(0, 0),
+      getPixel(width - 1, 0),
+      getPixel(0, height - 1),
+      getPixel(width - 1, height - 1)
+    ];
+
+    let matchingCorners = 0;
+    const tolerance = 30;
+
+    for (const corner of corners) {
+      if (corner.a < 128) continue;
+      const dr = Math.abs(corner.r - bgColor.r);
+      const dg = Math.abs(corner.g - bgColor.g);
+      const db = Math.abs(corner.b - bgColor.b);
+      if (dr <= tolerance && dg <= tolerance && db <= tolerance) {
+        matchingCorners++;
+      }
+    }
+
+    // If less than 2 corners match, the guess might be wrong
+    // but we still return it as our best guess
+  }
+
+  return bgColor;
+}
+
+/**
+ * Updates the UI to show the guessed/selected background color
+ */
+function updateBgColorPreview(color: { r: number; g: number; b: number } | null): void {
+  if (color) {
+    const hex = `#${color.r.toString(16).padStart(2, '0')}${color.g.toString(16).padStart(2, '0')}${color.b.toString(16).padStart(2, '0')}`;
+    elements.bgColorPreview.style.backgroundColor = hex;
+    elements.bgColorPreview.classList.add('has-color');
+  } else {
+    elements.bgColorPreview.style.backgroundColor = '';
+    elements.bgColorPreview.classList.remove('has-color');
+  }
+}
+
+// ============================================================================
 // Image Processing
 // ============================================================================
 
@@ -511,6 +672,13 @@ async function handleImageFile(file: File): Promise<void> {
     const baseName = file.name.replace(/\.[^/.]+$/, '');
     state.filename = `${baseName}_keychain`;
     elements.filenameInput.value = state.filename;
+
+    // Guess background color from edge pixels
+    const guessedBgColor = guessBackgroundColor(state.originalImageData);
+    if (guessedBgColor) {
+      state.bgColor = guessedBgColor;
+      updateBgColorPreview(guessedBgColor);
+    }
 
     // Show preview, hide drop zone
     elements.dropZone.style.display = 'none';
@@ -900,8 +1068,7 @@ function setupEventListeners(): void {
     state.eyedropperActive = false;
     elements.eyedropperBtn.classList.remove('active');
     elements.imagePreview.classList.remove('eyedropper-mode');
-    elements.bgColorPreview.style.backgroundColor = '';
-    elements.bgColorPreview.classList.remove('has-color');
+    updateBgColorPreview(null);
 
     // Reset pixel grid
     state.detectedScale = null;
@@ -1055,8 +1222,20 @@ function setupEventListeners(): void {
   }
 
   // Background removal toggle
+  const bgColorInline = elements.bgColorPreview.parentElement;
+
+  // Set initial disabled state
+  if (bgColorInline) {
+    bgColorInline.classList.add('disabled');
+  }
+
   elements.bgRemoveToggle.addEventListener('change', () => {
     state.bgRemoveEnabled = elements.bgRemoveToggle.checked;
+
+    // Toggle color picker disabled state
+    if (bgColorInline) {
+      bgColorInline.classList.toggle('disabled', !state.bgRemoveEnabled);
+    }
 
     if (state.bgRemoveEnabled) {
       elements.bgRemoveOptions.classList.add('visible');
@@ -1124,9 +1303,7 @@ function setupEventListeners(): void {
     state.bgColor = { r, g, b };
 
     // Update UI
-    const hexColor = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
-    elements.bgColorPreview.style.backgroundColor = hexColor;
-    elements.bgColorPreview.classList.add('has-color');
+    updateBgColorPreview(state.bgColor);
 
     // Deactivate eyedropper after picking
     state.eyedropperActive = false;
@@ -1423,7 +1600,70 @@ function init(): void {
   // Setup event listeners
   setupEventListeners();
 
+  // Setup collapsible panels
+  setupCollapsiblePanels();
+
   console.log('Pixel Art to 3D Converter initialized');
+}
+
+// ============================================================================
+// Collapsible Panels
+// ============================================================================
+
+function setupCollapsiblePanels(): void {
+  const STORAGE_KEY = 'pixelart-panel-states';
+
+  // Load saved states from localStorage
+  function loadPanelStates(): Record<string, boolean> {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  }
+
+  // Save states to localStorage
+  function savePanelStates(states: Record<string, boolean>): void {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(states));
+    } catch {
+      // Ignore storage errors
+    }
+  }
+
+  const savedStates = loadPanelStates();
+
+  // Setup click handlers for all collapsible headers
+  document.querySelectorAll('.panel-header[data-collapse]').forEach(header => {
+    const contentId = (header as HTMLElement).dataset.collapse;
+    if (!contentId) return;
+
+    const content = document.getElementById(contentId);
+    if (!content) return;
+
+    // Restore saved state if available
+    if (contentId in savedStates) {
+      const isCollapsed = savedStates[contentId];
+      header.classList.toggle('collapsed', isCollapsed);
+      content.classList.toggle('collapsed', isCollapsed);
+    }
+
+    // Add click handler
+    header.addEventListener('click', (e) => {
+      // Don't toggle if clicking on badge or other interactive elements
+      const target = e.target as HTMLElement;
+      if (target.closest('.badge')) return;
+
+      const isCollapsed = header.classList.toggle('collapsed');
+      content.classList.toggle('collapsed', isCollapsed);
+
+      // Save state
+      const states = loadPanelStates();
+      states[contentId] = isCollapsed;
+      savePanelStates(states);
+    });
+  });
 }
 
 // Start the app

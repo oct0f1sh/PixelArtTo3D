@@ -17,304 +17,324 @@
       <main class="main-layout">
         <!-- Left Column: Input and Settings -->
         <section class="column column-left">
-          <!-- Image Upload Panel -->
+          <!-- Image Upload Panel - Always Expanded -->
           <article class="panel" id="upload-panel">
-            <header class="panel-header">
+            <header class="panel-header" data-collapse="upload-content">
               <h2>Image Input</h2>
+              <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
             </header>
 
-            <div class="drop-zone" id="drop-zone">
-              <div class="drop-zone-icon">📁</div>
-              <p class="drop-zone-text">
-                <strong>Drop your pixel art here</strong> or click to browse
-              </p>
-              <p class="drop-zone-hint">Supports PNG, JPG, GIF, WebP</p>
-              <input
-                type="file"
-                id="file-input"
-                class="drop-zone-input"
-                accept="image/png,image/jpeg,image/gif,image/webp"
-              />
-            </div>
-
-            <div class="image-preview" id="image-preview">
-              <div class="image-previews-row">
-                <!-- Input Image Preview -->
-                <div class="image-preview-panel">
-                  <div class="image-preview-label">Input</div>
-                  <div class="image-preview-container">
-                    <img id="preview-image" src="" alt="Uploaded pixel art preview" />
-                    <canvas id="pixel-grid-overlay" class="pixel-grid-overlay"></canvas>
-                  </div>
-                  <div class="image-info">
-                    <span id="image-dimensions">-- x -- px</span>
-                  </div>
-                  <div class="image-preview-controls">
-                    <label class="toggle-label">
-                      <input type="checkbox" id="pixel-grid-toggle" />
-                      <span>Show grid</span>
-                    </label>
-                  </div>
-                </div>
-
-                <!-- Output Image Preview -->
-                <div class="image-preview-panel">
-                  <div class="image-preview-label">Output</div>
-                  <div class="image-preview-container">
-                    <img id="output-preview-image" src="" alt="Processed pixel art preview" />
-                    <canvas id="output-grid-overlay" class="pixel-grid-overlay"></canvas>
-                  </div>
-                  <div class="image-info">
-                    <span id="output-dimensions">-- x -- px</span>
-                  </div>
-                  <div class="image-preview-controls">
-                    <label class="toggle-label">
-                      <input type="checkbox" id="output-grid-toggle" />
-                      <span>Show grid</span>
-                    </label>
-                  </div>
-                </div>
-              </div>
-
-              <div class="image-info">
-                <span id="image-filename">--</span>
-              </div>
-              <button type="button" class="canvas-control-btn" id="clear-image-btn">
-                Clear Image
-              </button>
-            </div>
-          </article>
-
-          <!-- Background Removal Panel -->
-          <article class="panel" id="background-panel">
-            <header class="panel-header">
-              <h2>Background Removal</h2>
-            </header>
-
-            <div class="control-group">
-              <label class="checkbox-group">
+            <div class="panel-content" id="upload-content">
+              <div class="drop-zone" id="drop-zone">
+                <div class="drop-zone-icon">📁</div>
+                <p class="drop-zone-text">
+                  <strong>Drop your pixel art here</strong> or click to browse
+                </p>
+                <p class="drop-zone-hint">Supports PNG, JPG, GIF, WebP</p>
                 <input
-                  type="checkbox"
-                  id="bg-remove-toggle"
-                  class="checkbox-input"
+                  type="file"
+                  id="file-input"
+                  class="drop-zone-input"
+                  accept="image/png,image/jpeg,image/gif,image/webp"
                 />
-                <span class="checkbox-label">Remove background color</span>
-              </label>
-            </div>
+              </div>
 
-            <div class="bg-remove-options" id="bg-remove-options">
-              <div class="control-group">
-                <label class="control-label">Background Color</label>
-                <div class="bg-color-picker">
-                  <div class="bg-color-preview" id="bg-color-preview">
-                    <span class="bg-color-hint">Click eyedropper, then click on image</span>
+              <div class="image-preview" id="image-preview">
+                <div class="image-previews-row">
+                  <!-- Input Image Preview -->
+                  <div class="image-preview-panel">
+                    <div class="image-preview-label">Input</div>
+                    <div class="image-preview-container">
+                      <img id="preview-image" src="" alt="Uploaded pixel art preview" />
+                      <canvas id="pixel-grid-overlay" class="pixel-grid-overlay"></canvas>
+                    </div>
+                    <div class="image-info">
+                      <span id="image-dimensions">-- x -- px</span>
+                    </div>
+                    <div class="image-preview-controls">
+                      <label class="toggle-label">
+                        <input type="checkbox" id="pixel-grid-toggle" />
+                        <span>Show grid</span>
+                      </label>
+                    </div>
                   </div>
-                  <button type="button" class="eyedropper-btn" id="eyedropper-btn" title="Pick color from image">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M2 22l1-1h3l9-9"/>
-                      <path d="M3 21v-3l9-9"/>
-                      <path d="M14.5 5.5l4 4"/>
-                      <path d="M18.5 9.5l-4-4 1.5-1.5a2.83 2.83 0 114 4L18.5 9.5z"/>
-                    </svg>
-                  </button>
+
+                  <!-- Output Image Preview -->
+                  <div class="image-preview-panel">
+                    <div class="image-preview-label">Output</div>
+                    <div class="image-preview-container">
+                      <img id="output-preview-image" src="" alt="Processed pixel art preview" />
+                      <canvas id="output-grid-overlay" class="pixel-grid-overlay"></canvas>
+                    </div>
+                    <div class="image-info">
+                      <span id="output-dimensions">-- x -- px</span>
+                    </div>
+                    <div class="image-preview-controls">
+                      <label class="toggle-label">
+                        <input type="checkbox" id="output-grid-toggle" />
+                        <span>Show grid</span>
+                      </label>
+                    </div>
+                  </div>
                 </div>
-                <p class="control-hint">
-                  Select the background color to remove from edges only
-                </p>
+
+                <div class="image-info">
+                  <span id="image-filename">--</span>
+                </div>
+                <button type="button" class="canvas-control-btn" id="clear-image-btn">
+                  Clear Image
+                </button>
+              </div>
+            </div>
+          </article>
+
+          <!-- Background Removal Panel - Collapsed by Default -->
+          <article class="panel" id="background-panel">
+            <header class="panel-header collapsed" data-collapse="bg-content">
+              <h2>Background Removal</h2>
+              <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </header>
+
+            <div class="panel-content collapsed" id="bg-content">
+              <div class="control-group">
+                <div class="bg-remove-row">
+                  <label class="checkbox-group">
+                    <input
+                      type="checkbox"
+                      id="bg-remove-toggle"
+                      class="checkbox-input"
+                    />
+                    <span class="checkbox-label">Remove background color</span>
+                  </label>
+                  <div class="bg-color-inline">
+                    <div class="bg-color-preview" id="bg-color-preview">
+                      <span class="bg-color-hint">Pick color</span>
+                    </div>
+                    <button type="button" class="eyedropper-btn" id="eyedropper-btn" title="Pick color from image">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M2 22l1-1h3l9-9"/>
+                        <path d="M3 21v-3l9-9"/>
+                        <path d="M14.5 5.5l4 4"/>
+                        <path d="M18.5 9.5l-4-4 1.5-1.5a2.83 2.83 0 114 4L18.5 9.5z"/>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="bg-remove-options" id="bg-remove-options">
+                <div class="control-group">
+                  <label class="control-label" for="bg-tolerance-slider">
+                    Color Tolerance
+                  </label>
+                  <div class="range-container">
+                    <input
+                      type="range"
+                      id="bg-tolerance-slider"
+                      class="range-slider"
+                      min="0"
+                      max="50"
+                      value="10"
+                      step="1"
+                    />
+                    <span class="range-value" id="bg-tolerance-value">10</span>
+                  </div>
+                  <p class="control-hint">
+                    Higher values remove more similar colors
+                  </p>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <!-- Physical Dimensions Panel - Collapsed by Default -->
+          <article class="panel" id="dimensions-panel">
+            <header class="panel-header collapsed" data-collapse="dimensions-content">
+              <h2>Physical Dimensions</h2>
+              <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </header>
+
+            <div class="panel-content collapsed" id="dimensions-content">
+              <div class="control-group">
+                <label class="control-label">Unit</label>
+                <div class="toggle-group" id="unit-toggle">
+                  <label class="toggle-option active">
+                    <input type="radio" name="unit" value="mm" checked />
+                    mm
+                  </label>
+                  <label class="toggle-option">
+                    <input type="radio" name="unit" value="inches" />
+                    inches
+                  </label>
+                </div>
               </div>
 
               <div class="control-group">
-                <label class="control-label" for="bg-tolerance-slider">
-                  Color Tolerance
-                </label>
-                <div class="range-container">
-                  <input
-                    type="range"
-                    id="bg-tolerance-slider"
-                    class="range-slider"
-                    min="0"
-                    max="50"
-                    value="10"
-                    step="1"
-                  />
-                  <span class="range-value" id="bg-tolerance-value">10</span>
+                <label class="control-label">Set Dimension</label>
+                <div class="toggle-group" id="dimension-toggle">
+                  <label class="toggle-option active">
+                    <input type="radio" name="set-dimension" value="width" checked />
+                    Width
+                  </label>
+                  <label class="toggle-option">
+                    <input type="radio" name="set-dimension" value="height" />
+                    Height
+                  </label>
                 </div>
-                <p class="control-hint">
-                  Higher values remove more similar colors
-                </p>
               </div>
-            </div>
-          </article>
 
-          <!-- Physical Dimensions Panel -->
-          <article class="panel" id="dimensions-panel">
-            <header class="panel-header">
-              <h2>Physical Dimensions</h2>
-            </header>
-
-            <div class="control-group">
-              <label class="control-label">Unit</label>
-              <div class="toggle-group" id="unit-toggle">
-                <label class="toggle-option active">
-                  <input type="radio" name="unit" value="mm" checked />
-                  mm
+              <div class="control-group">
+                <label class="control-label" for="dimension-input">
+                  <span id="dimension-input-label">Width</span>
+                  (<span id="dimension-unit-label">mm</span>)
                 </label>
-                <label class="toggle-option">
-                  <input type="radio" name="unit" value="inches" />
-                  inches
-                </label>
-              </div>
-            </div>
-
-            <div class="control-group">
-              <label class="control-label">Set Dimension</label>
-              <div class="toggle-group" id="dimension-toggle">
-                <label class="toggle-option active">
-                  <input type="radio" name="set-dimension" value="width" checked />
-                  Width
-                </label>
-                <label class="toggle-option">
-                  <input type="radio" name="set-dimension" value="height" />
-                  Height
-                </label>
-              </div>
-            </div>
-
-            <div class="control-group">
-              <label class="control-label" for="dimension-input">
-                <span id="dimension-input-label">Width</span>
-                (<span id="dimension-unit-label">mm</span>)
-              </label>
-              <input
-                type="number"
-                id="dimension-input"
-                min="5"
-                max="200"
-                value="30"
-                step="0.1"
-              />
-            </div>
-
-            <div class="dimension-display" id="output-dimensions">
-              <div class="dimension">
-                <div class="dimension-value" id="output-width">30.0</div>
-                <div class="dimension-label">Width (<span class="output-unit">mm</span>)</div>
-              </div>
-              <div class="dimension-separator">×</div>
-              <div class="dimension">
-                <div class="dimension-value" id="output-height">--</div>
-                <div class="dimension-label">Height (<span class="output-unit">mm</span>)</div>
-              </div>
-            </div>
-          </article>
-
-          <!-- Height Settings Panel -->
-          <article class="panel" id="height-panel">
-            <header class="panel-header">
-              <h2>3D Height Settings</h2>
-            </header>
-
-            <div class="control-group">
-              <label class="control-label" for="pixel-height-slider">
-                Pixel Height (<span class="height-unit">mm</span>)
-              </label>
-              <div class="range-container">
                 <input
-                  type="range"
-                  id="pixel-height-slider"
-                  class="range-slider"
-                  min="0.5"
-                  max="10"
-                  value="2"
+                  type="number"
+                  id="dimension-input"
+                  min="5"
+                  max="200"
+                  value="30"
                   step="0.1"
                 />
-                <span class="range-value" id="pixel-height-value">2.0</span>
-              </div>
-              <p class="control-hint">
-                Height of raised pixels (0.5-10)
-              </p>
-            </div>
-
-            <div class="control-group">
-              <label class="checkbox-group">
-                <input
-                  type="checkbox"
-                  id="base-toggle"
-                  class="checkbox-input"
-                  checked
-                />
-                <span class="checkbox-label">Include base layer</span>
-              </label>
-            </div>
-
-            <div class="base-options" id="base-options">
-              <div class="control-group">
-                <label class="control-label" for="base-height-slider">
-                  Base Height (<span class="height-unit">mm</span>)
-                </label>
-                <div class="range-container">
-                  <input
-                    type="range"
-                    id="base-height-slider"
-                    class="range-slider"
-                    min="0.5"
-                    max="5"
-                    value="1"
-                    step="0.1"
-                  />
-                  <span class="range-value" id="base-height-value">1.0</span>
-                </div>
-                <p class="control-hint">
-                  Thickness of the base layer (0.5-5)
-                </p>
               </div>
 
-              <div class="control-group">
-                <label class="control-label" for="base-color-input">
-                  Base Color
-                </label>
-                <div class="color-input-container">
-                  <input
-                    type="color"
-                    id="base-color-input"
-                    value="#000000"
-                  />
-                  <span class="color-value" id="base-color-value">#000000</span>
+              <div class="dimension-display" id="output-dimensions">
+                <div class="dimension">
+                  <div class="dimension-value" id="output-width">30.0</div>
+                  <div class="dimension-label">Width (<span class="output-unit">mm</span>)</div>
                 </div>
-                <p class="control-hint">
-                  Color of the base layer
-                </p>
+                <div class="dimension-separator">×</div>
+                <div class="dimension">
+                  <div class="dimension-value" id="output-height">--</div>
+                  <div class="dimension-label">Height (<span class="output-unit">mm</span>)</div>
+                </div>
               </div>
             </div>
           </article>
 
-          <!-- Keyhole Settings Panel -->
-          <article class="panel" id="keyhole-panel">
-            <header class="panel-header">
-              <h2>Keyhole Options</h2>
+          <!-- Height Settings Panel - Collapsed by Default -->
+          <article class="panel" id="height-panel">
+            <header class="panel-header collapsed" data-collapse="height-content">
+              <h2>3D Height Settings</h2>
+              <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
             </header>
 
-            <div class="control-group">
-              <label class="checkbox-group">
-                <input
-                  type="checkbox"
-                  id="keyhole-toggle"
-                  class="checkbox-input"
-                />
-                <span class="checkbox-label">Add keyhole for hanging</span>
-              </label>
-            </div>
-
-            <div class="keyhole-options" id="keyhole-options">
+            <div class="panel-content collapsed" id="height-content">
               <div class="control-group">
-                <label class="control-label" for="keyhole-position">
-                  Keyhole Position
+                <label class="control-label" for="pixel-height-slider">
+                  Pixel Height (<span class="height-unit">mm</span>)
                 </label>
-                <select id="keyhole-position">
-                  <option value="top-left">Top Left</option>
-                  <option value="top-center" selected>Top Center</option>
-                  <option value="top-right">Top Right</option>
-                </select>
+                <div class="range-container">
+                  <input
+                    type="range"
+                    id="pixel-height-slider"
+                    class="range-slider"
+                    min="0.5"
+                    max="10"
+                    value="2"
+                    step="0.1"
+                  />
+                  <span class="range-value" id="pixel-height-value">2.0</span>
+                </div>
+                <p class="control-hint">
+                  Height of raised pixels (0.5-10)
+                </p>
+              </div>
+
+              <div class="control-group">
+                <label class="checkbox-group">
+                  <input
+                    type="checkbox"
+                    id="base-toggle"
+                    class="checkbox-input"
+                    checked
+                  />
+                  <span class="checkbox-label">Include base layer</span>
+                </label>
+              </div>
+
+              <div class="base-options" id="base-options">
+                <div class="control-group">
+                  <label class="control-label" for="base-height-slider">
+                    Base Height (<span class="height-unit">mm</span>)
+                  </label>
+                  <div class="range-container">
+                    <input
+                      type="range"
+                      id="base-height-slider"
+                      class="range-slider"
+                      min="0.5"
+                      max="5"
+                      value="1"
+                      step="0.1"
+                    />
+                    <span class="range-value" id="base-height-value">1.0</span>
+                  </div>
+                  <p class="control-hint">
+                    Thickness of the base layer (0.5-5)
+                  </p>
+                </div>
+
+                <div class="control-group">
+                  <label class="control-label" for="base-color-input">
+                    Base Color
+                  </label>
+                  <div class="color-input-container">
+                    <input
+                      type="color"
+                      id="base-color-input"
+                      value="#000000"
+                    />
+                    <span class="color-value" id="base-color-value">#000000</span>
+                  </div>
+                  <p class="control-hint">
+                    Color of the base layer
+                  </p>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <!-- Keyhole Settings Panel - Collapsed by Default -->
+          <article class="panel" id="keyhole-panel">
+            <header class="panel-header collapsed" data-collapse="keyhole-content">
+              <h2>Keyhole Options</h2>
+              <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </header>
+
+            <div class="panel-content collapsed" id="keyhole-content">
+              <div class="control-group">
+                <label class="checkbox-group">
+                  <input
+                    type="checkbox"
+                    id="keyhole-toggle"
+                    class="checkbox-input"
+                  />
+                  <span class="checkbox-label">Add keyhole for hanging</span>
+                </label>
+              </div>
+
+              <div class="keyhole-options" id="keyhole-options">
+                <div class="control-group">
+                  <label class="control-label" for="keyhole-position">
+                    Keyhole Position
+                  </label>
+                  <select id="keyhole-position">
+                    <option value="top-left">Top Left</option>
+                    <option value="top-center" selected>Top Center</option>
+                    <option value="top-right">Top Right</option>
+                  </select>
+                </div>
               </div>
             </div>
           </article>
@@ -322,120 +342,135 @@
 
         <!-- Right Column: Preview and Export -->
         <section class="column column-right">
-          <!-- 3D Preview Panel -->
+          <!-- 3D Preview Panel - Always Expanded -->
           <article class="panel" id="preview-panel">
-            <header class="panel-header">
+            <header class="panel-header" data-collapse="preview-content">
               <h2>3D Preview</h2>
+              <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
             </header>
 
-            <div class="preview-canvas-container" id="preview-container">
-              <canvas id="preview-canvas"></canvas>
-              <div class="canvas-placeholder" id="canvas-placeholder">
-                <div class="canvas-placeholder-icon">🎲</div>
-                <p>Upload an image to see 3D preview</p>
+            <div class="panel-content" id="preview-content">
+              <div class="preview-canvas-container" id="preview-container">
+                <canvas id="preview-canvas"></canvas>
+                <div class="canvas-placeholder" id="canvas-placeholder">
+                  <div class="canvas-placeholder-icon">🎲</div>
+                  <p>Upload an image to see 3D preview</p>
+                </div>
               </div>
-            </div>
 
-            <div class="canvas-controls">
-              <button type="button" class="canvas-control-btn" id="reset-view-btn">
-                Reset View
-              </button>
+              <div class="canvas-controls">
+                <button type="button" class="canvas-control-btn" id="reset-view-btn">
+                  Reset View
+                </button>
+              </div>
             </div>
           </article>
 
-          <!-- Color Palette Panel -->
+          <!-- Color Palette Panel - Collapsed by Default -->
           <article class="panel" id="palette-panel">
-            <header class="panel-header">
+            <header class="panel-header collapsed" data-collapse="palette-content">
               <h2>Color Palette</h2>
               <span class="badge" id="palette-count">0 colors</span>
+              <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
             </header>
 
-            <div class="control-group">
-              <label class="checkbox-group">
-                <input
-                  type="checkbox"
-                  id="color-merge-toggle"
-                  class="checkbox-input"
-                />
-                <span class="checkbox-label">Merge similar colors</span>
-              </label>
-            </div>
-
-            <div class="color-merge-options" id="color-merge-options">
+            <div class="panel-content collapsed" id="palette-content">
               <div class="control-group">
-                <label class="control-label" for="color-merge-slider">
-                  Similarity Threshold
-                </label>
-                <div class="range-container">
+                <label class="checkbox-group">
                   <input
-                    type="range"
-                    id="color-merge-slider"
-                    class="range-slider"
-                    min="1"
-                    max="50"
-                    value="1"
-                    step="1"
+                    type="checkbox"
+                    id="color-merge-toggle"
+                    class="checkbox-input"
                   />
-                  <span class="range-value" id="color-merge-value">1%</span>
-                </div>
-                <p class="control-hint">
-                  Higher values merge more colors together
-                </p>
+                  <span class="checkbox-label">Merge similar colors</span>
+                </label>
               </div>
-            </div>
 
-            <div class="color-palette" id="color-palette">
-              <div class="color-palette-empty">
-                No colors extracted yet. Upload an image to see the palette.
+              <div class="color-merge-options" id="color-merge-options">
+                <div class="control-group">
+                  <label class="control-label" for="color-merge-slider">
+                    Similarity Threshold
+                  </label>
+                  <div class="range-container">
+                    <input
+                      type="range"
+                      id="color-merge-slider"
+                      class="range-slider"
+                      min="1"
+                      max="50"
+                      value="1"
+                      step="1"
+                    />
+                    <span class="range-value" id="color-merge-value">1%</span>
+                  </div>
+                  <p class="control-hint">
+                    Higher values merge more colors together
+                  </p>
+                </div>
+              </div>
+
+              <div class="color-palette" id="color-palette">
+                <div class="color-palette-empty">
+                  No colors extracted yet. Upload an image to see the palette.
+                </div>
               </div>
             </div>
           </article>
 
-          <!-- Export Panel -->
+          <!-- Export Panel - Always Expanded -->
           <article class="panel" id="export-panel">
-            <header class="panel-header">
+            <header class="panel-header" data-collapse="export-content">
               <h2>Export</h2>
+              <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
             </header>
 
-            <div class="export-section">
-              <div class="control-group">
-                <label class="control-label">Export Format</label>
-                <div class="toggle-group" id="format-toggle">
-                  <label class="toggle-option">
-                    <input type="radio" name="export-format" value="stl" />
-                    STL
-                  </label>
-                  <label class="toggle-option active">
-                    <input type="radio" name="export-format" value="3mf" checked />
-                    3MF
-                  </label>
+            <div class="panel-content" id="export-content">
+              <div class="export-section">
+                <div class="control-group">
+                  <label class="control-label">Export Format</label>
+                  <div class="toggle-group" id="format-toggle">
+                    <label class="toggle-option">
+                      <input type="radio" name="export-format" value="stl" />
+                      STL
+                    </label>
+                    <label class="toggle-option active">
+                      <input type="radio" name="export-format" value="3mf" checked />
+                      3MF
+                    </label>
+                  </div>
+                  <p class="control-hint" id="format-hint">
+                    Multi-color with separate objects per color
+                  </p>
                 </div>
-                <p class="control-hint" id="format-hint">
-                  Multi-color with separate objects per color
-                </p>
-              </div>
 
-              <div class="control-group">
-                <label class="control-label" for="filename-input">
-                  Filename
-                </label>
-                <div class="export-filename">
-                  <input
-                    type="text"
-                    id="filename-input"
-                    value="original_keychain"
-                    placeholder="Enter filename"
-                  />
-                  <span class="extension" id="file-extension">.3mf</span>
+                <div class="control-group">
+                  <label class="control-label" for="filename-input">
+                    Filename
+                  </label>
+                  <div class="export-filename">
+                    <input
+                      type="text"
+                      id="filename-input"
+                      value="original_keychain"
+                      placeholder="Enter filename"
+                    />
+                    <span class="extension" id="file-extension">.3mf</span>
+                  </div>
                 </div>
+
+                <div class="status-message" id="export-status"></div>
+
+                <button type="button" class="download-btn" id="download-btn" disabled>
+                  <span class="download-btn-icon">⬇</span>
+                  Download Model
+                </button>
               </div>
-
-              <div class="status-message" id="export-status"></div>
-
-              <button type="button" class="download-btn" id="download-btn" disabled>
-                <span class="download-btn-icon">⬇</span>
-                Download Model
-              </button>
             </div>
           </article>
         </section>
