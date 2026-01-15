@@ -35,6 +35,8 @@ export function initPreview(container: HTMLElement): PreviewController {
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(container.clientWidth, container.clientHeight);
   renderer.setPixelRatio(window.devicePixelRatio);
+  // Use sRGB color space for correct color display
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
   container.appendChild(renderer.domElement);
 
   // OrbitControls setup

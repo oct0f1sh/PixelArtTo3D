@@ -688,8 +688,11 @@ async function generateAndDisplay3D(): Promise<void> {
 
   // Add base mesh with user-specified color
   if (state.meshResult.baseMesh && state.meshResult.baseMesh.attributes.position) {
+    // Parse hex color and convert from sRGB to linear for correct rendering
+    const baseColorObj = new THREE.Color();
+    baseColorObj.setStyle(state.baseColor, THREE.SRGBColorSpace);
     const baseMaterial = new THREE.MeshBasicMaterial({
-      color: new THREE.Color(state.baseColor),
+      color: baseColorObj,
     });
     const baseMesh = new THREE.Mesh(state.meshResult.baseMesh, baseMaterial);
     meshes.push(baseMesh);
@@ -699,8 +702,11 @@ async function generateAndDisplay3D(): Promise<void> {
   for (const [colorIndex, geometry] of state.meshResult.colorMeshes) {
     const color = palette[colorIndex];
     if (color && geometry.attributes.position) {
+      // Use SRGBColorSpace to correctly interpret our sRGB color values
+      const threeColor = new THREE.Color();
+      threeColor.setRGB(color.r / 255, color.g / 255, color.b / 255, THREE.SRGBColorSpace);
       const material = new THREE.MeshBasicMaterial({
-        color: new THREE.Color(color.r / 255, color.g / 255, color.b / 255),
+        color: threeColor,
       });
       const mesh = new THREE.Mesh(geometry, material);
       meshes.push(mesh);
