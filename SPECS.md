@@ -32,7 +32,7 @@ A single-page web application that converts pixel art images or photographs into
 ### 1. Image Input
 
 - **Drag & drop zone** or file selector button
-- Accepted formats: PNG, JPG, GIF, WebP
+- Accepted formats: PNG, JPG, WebP
 - **Transparency handling:** Pixels with <50% opacity are filtered out (treated as background)
 - **Auto scale detection:** Automatically detects upscaled pixel art and downsamples to native resolution
 - **Input/Output preview:** Side-by-side comparison with zoom and pan controls

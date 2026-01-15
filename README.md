@@ -18,7 +18,7 @@ Convert pixel art images into 3D printable models (STL/3MF). Perfect for creatin
 
 ## How It Works
 
-1. **Drop an image** — PNG, JPG, GIF, or WebP
+1. **Drop an image** — PNG, JPG, or WebP
 2. **Adjust settings** — Remove background, reduce colors, set dimensions
 3. **Preview in 3D** — Rotate and inspect your model
 4. **Export** — Download STL or 3MF file
