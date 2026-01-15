@@ -470,7 +470,10 @@ async function handleExport(): Promise<void> {
     return;
   }
 
-  const filename = `${state.filename}.${state.exportFormat}`;
+  // Read filename directly from input to catch any pending changes
+  const currentFilename = elements.filenameInput.value || 'pixel_art_keychain';
+  state.filename = currentFilename;
+  const filename = `${currentFilename}.${state.exportFormat}`;
 
   // Clone and rotate geometries for export (model should lay flat on build plate)
   const rotatedGeometries: THREE.BufferGeometry[] = [];
