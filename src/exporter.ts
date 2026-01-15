@@ -190,7 +190,8 @@ function colorToHex(color: Color): string {
 function create3DModelXML(
   colorGeometries: Map<number, THREE.BufferGeometry>,
   baseGeometry: THREE.BufferGeometry,
-  palette: Color[]
+  palette: Color[],
+  title: string
 ): string {
   const objects: string[] = [];
   const buildItems: string[] = [];
@@ -200,15 +201,18 @@ function create3DModelXML(
   const baseMaterialId = 1;
   const colorMaterialStartId = 2;
 
+  // Sort color indices numerically for consistent output
+  const sortedColorIndices = Array.from(colorGeometries.keys()).sort((a, b) => a - b);
+
   // Build materials XML
   const materials: string[] = [];
   materials.push(`      <base name="base_material" displaycolor="#808080" />`);
 
-  // Add color materials
+  // Add color materials in sorted order
   const colorIndexToMaterialId = new Map<number, number>();
   let materialId = colorMaterialStartId;
 
-  for (const [colorIndex] of colorGeometries) {
+  for (const colorIndex of sortedColorIndices) {
     if (colorIndex < palette.length) {
       const color = palette[colorIndex];
       const hex = colorToHex(color);
@@ -222,7 +226,7 @@ function create3DModelXML(
   if (baseGeometry) {
     const { vertices, triangles } = geometryToMeshXML(baseGeometry);
     if (vertices && triangles) {
-      objects.push(`    <object id="${objectId}" name="base" pid="1" pindex="0" type="model">
+      objects.push(`    <object id="${objectId}" name="${title}_base" pid="1" pindex="0" type="model">
       <mesh>
         <vertices>
 ${vertices}
@@ -237,13 +241,16 @@ ${triangles}
     }
   }
 
-  // Create color objects
-  for (const [colorIndex, geometry] of colorGeometries) {
+  // Create color objects in sorted order
+  for (const colorIndex of sortedColorIndices) {
+    const geometry = colorGeometries.get(colorIndex);
+    if (!geometry) continue;
+
     const { vertices, triangles } = geometryToMeshXML(geometry);
     if (vertices && triangles) {
       const matId = colorIndexToMaterialId.get(colorIndex) || baseMaterialId;
       const pindex = matId - 1; // pindex is 0-based within the basematerials group
-      objects.push(`    <object id="${objectId}" name="color_${colorIndex + 1}" pid="1" pindex="${pindex}" type="model">
+      objects.push(`    <object id="${objectId}" name="${title}_color_${colorIndex + 1}" pid="1" pindex="${pindex}" type="model">
       <mesh>
         <vertices>
 ${vertices}
@@ -260,6 +267,9 @@ ${triangles}
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:m="http://schemas.microsoft.com/3dmanufacturing/material/2015/02">
+  <metadata name="Title">${title}</metadata>
+  <metadata name="Designer">${title}</metadata>
+  <metadata name="Description">${title}</metadata>
   <metadata name="Application">PixelArtConverter</metadata>
   <resources>
     <basematerials id="1">
@@ -444,8 +454,9 @@ export async function export3MF(
     // Relationships
     files.set('_rels/.rels', createRelationshipsXML());
 
-    // 3D Model
-    const modelXML = create3DModelXML(colorGeometries, baseGeometry, palette);
+    // 3D Model - use filename without extension as title
+    const title = filename.replace(/\.[^.]+$/, '');
+    const modelXML = create3DModelXML(colorGeometries, baseGeometry, palette, title);
     files.set('3D/3dmodel.model', modelXML);
 
     // Create ZIP blob
