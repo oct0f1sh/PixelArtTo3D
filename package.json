@@ -12,7 +12,9 @@
     "test:ui": "vitest --ui"
   },
   "dependencies": {
-    "three": "^0.160.0"
+    "manifold-3d": "^3.3.2",
+    "three": "^0.160.0",
+    "three-bvh-csg": "^0.0.17"
   },
   "devDependencies": {
     "@sentry/browser": "^7.100.0",

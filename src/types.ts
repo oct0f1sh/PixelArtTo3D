@@ -57,3 +57,31 @@ export interface ColorBox {
   bMin: number;
   bMax: number;
 }
+
+/**
+ * Type of keychain hole
+ */
+export type KeyholeType = 'holepunch' | 'floating';
+
+/**
+ * Position on the model surface (normalized 0-1)
+ */
+export interface KeyholePosition {
+  x: number;
+  y: number;
+}
+
+/**
+ * Configuration for keychain hole feature
+ */
+export interface KeyholeConfig {
+  enabled: boolean;
+  type: KeyholeType;
+  position: KeyholePosition | null;
+  /** Hole diameter in mm (for holepunch) */
+  holeDiameter: number;
+  /** Inner diameter in mm (for floating - the hole) */
+  innerDiameter: number;
+  /** Outer diameter in mm (for floating - total ring size) */
+  outerDiameter: number;
+}

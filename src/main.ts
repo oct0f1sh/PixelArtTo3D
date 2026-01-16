@@ -7,7 +7,7 @@ import './style.css';
 import * as THREE from 'three';
 import { loadImage, quantizeColors, removeBackground, resizeImage, getOptimalDimensions, resizePixelArt } from './imageProcessor';
 import { initPreview, type PreviewController } from './preview';
-import { generateMeshes, rotateForPrinting, type MeshResult } from './meshGenerator';
+import { generateMeshesAsync, rotateForPrinting, type MeshResult } from './meshGenerator';
 import { exportSTL, export3MF } from './exporter';
 import type { QuantizedResult, PixelGrid } from './types';
 
@@ -91,7 +91,12 @@ interface AppState {
   manuallyDeletedColors: Array<{ color: { r: number; g: number; b: number; hex: string }; pixels: Array<{ x: number; y: number }> }>;
   autoDeletedColors: Array<{ color: { r: number; g: number; b: number; hex: string }; pixels: Array<{ x: number; y: number }> }>;
   keyholeEnabled: boolean;
-  keyholePosition: 'top-left' | 'top-center' | 'top-right';
+  keyholeType: 'holepunch' | 'floating';
+  keyholePosition: { x: number; y: number } | null;
+  holeDiameter: number;
+  innerDiameter: number;
+  outerDiameter: number;
+  isDraggingKeyhole: boolean;
   exportFormat: 'stl' | '3mf';
   filename: string;
 
@@ -136,7 +141,12 @@ const state: AppState = {
   manuallyDeletedColors: [],
   autoDeletedColors: [],
   keyholeEnabled: false,
-  keyholePosition: 'top-center',
+  keyholeType: 'holepunch',
+  keyholePosition: null,
+  holeDiameter: 4,
+  innerDiameter: 4,
+  outerDiameter: 8,
+  isDraggingKeyhole: false,
   exportFormat: '3mf',
   filename: 'pixel_art_keychain',
 
@@ -216,7 +226,16 @@ const elements = {
   // Keyhole settings
   keyholeToggle: document.getElementById('keyhole-toggle') as HTMLInputElement,
   keyholeOptions: document.getElementById('keyhole-options') as HTMLDivElement,
-  keyholePosition: document.getElementById('keyhole-position') as HTMLSelectElement,
+  keyholeTypeToggle: document.getElementById('keyhole-type-toggle') as HTMLDivElement,
+  holepunchSettings: document.getElementById('holepunch-settings') as HTMLDivElement,
+  floatingSettings: document.getElementById('floating-settings') as HTMLDivElement,
+  holeDiameterSlider: document.getElementById('hole-diameter-slider') as HTMLInputElement,
+  holeDiameterValue: document.getElementById('hole-diameter-value') as HTMLSpanElement,
+  innerDiameterSlider: document.getElementById('inner-diameter-slider') as HTMLInputElement,
+  innerDiameterValue: document.getElementById('inner-diameter-value') as HTMLSpanElement,
+  outerDiameterSlider: document.getElementById('outer-diameter-slider') as HTMLInputElement,
+  outerDiameterValue: document.getElementById('outer-diameter-value') as HTMLSpanElement,
+  keyholeCoords: document.getElementById('keyhole-coords') as HTMLParagraphElement,
 
   // Preview
   previewContainer: document.getElementById('preview-container') as HTMLDivElement,
@@ -546,6 +565,19 @@ function showStatus(message: string, type: 'success' | 'error'): void {
     setTimeout(() => {
       elements.exportStatus.className = 'status-message';
     }, 3000);
+  }
+}
+
+/**
+ * Updates the keyhole coordinates display in the UI
+ */
+function updateKeyholeCoords(): void {
+  if (state.keyholePosition) {
+    elements.keyholeCoords.textContent = `Position: (${state.keyholePosition.x.toFixed(1)}, ${state.keyholePosition.y.toFixed(1)}) mm`;
+    elements.keyholeCoords.classList.add('has-position');
+  } else {
+    elements.keyholeCoords.textContent = 'Drag on 3D preview to position';
+    elements.keyholeCoords.classList.remove('has-position');
   }
 }
 
@@ -1115,7 +1147,8 @@ async function generateAndDisplay3D(): Promise<void> {
   console.log(`  Aspect ratio: ${(contentWidth / contentHeight).toFixed(4)}`);
 
   // Generate meshes (pass 0 for baseHeight if base is disabled)
-  state.meshResult = generateMeshes({
+  // Use async version for manifold-correct holepunch
+  state.meshResult = await generateMeshesAsync({
     pixelGrid: pixels,
     palette,
     pixelSize: pixelSizeMm,
@@ -1123,7 +1156,11 @@ async function generateAndDisplay3D(): Promise<void> {
     baseHeight: state.baseEnabled ? toMm(state.baseHeight, state.unit) : 0,
     keyhole: {
       enabled: state.keyholeEnabled,
+      type: state.keyholeType,
       position: state.keyholePosition,
+      holeDiameter: state.holeDiameter,
+      innerDiameter: state.innerDiameter,
+      outerDiameter: state.outerDiameter,
     },
   });
 
@@ -1190,31 +1227,69 @@ async function handleExport(): Promise<void> {
   state.filename = currentFilename;
   const filename = `${currentFilename}.${state.exportFormat}`;
 
-  // Clone and rotate geometries for export (model should lay flat on build plate)
   const rotatedGeometries: THREE.BufferGeometry[] = [];
   const rotatedColorGeometries = new Map<number, THREE.BufferGeometry>();
   let rotatedBaseMesh: THREE.BufferGeometry | null = null;
 
-  // Clone and rotate base mesh if it exists
-  if (state.meshResult.baseMesh && state.meshResult.baseMesh.attributes.position) {
-    rotatedBaseMesh = state.meshResult.baseMesh.clone();
-    rotateForPrinting(rotatedBaseMesh);
-    rotatedGeometries.push(rotatedBaseMesh);
-  }
-
-  // Clone and rotate color meshes
-  for (const [colorIndex, geometry] of state.meshResult.colorMeshes) {
-    if (geometry.attributes.position) {
-      const cloned = geometry.clone();
-      rotateForPrinting(cloned);
-      rotatedColorGeometries.set(colorIndex, cloned);
-      rotatedGeometries.push(cloned);
-    }
-  }
-
   try {
     if (state.exportFormat === 'stl') {
+      // For STL export, regenerate with singleMeshMode for zero non-manifold edges
+      const { pixels, palette } = state.quantizedResult;
+      const contentBounds = getContentBounds(pixels);
+      const contentWidth = contentBounds.width;
+      const contentHeight = contentBounds.height;
+      const inputValueMm = toMm(state.dimensionValue, state.unit);
+      let totalWidthMm: number;
+
+      if (state.setDimension === 'width') {
+        totalWidthMm = inputValueMm;
+      } else {
+        const aspectRatio = contentWidth / contentHeight;
+        totalWidthMm = inputValueMm * aspectRatio;
+      }
+
+      const pixelSizeMm = totalWidthMm / contentWidth;
+
+      // Generate unified mesh for STL (no internal divisions, zero non-manifold edges)
+      console.log('STL Export: Generating unified mesh with singleMeshMode=true');
+      console.log(`  Keyhole enabled: ${state.keyholeEnabled}, type: ${state.keyholeType}`);
+      if (state.keyholePosition) {
+        console.log(`  Keyhole position: (${state.keyholePosition.x.toFixed(2)}, ${state.keyholePosition.y.toFixed(2)})`);
+      }
+
+      const stlMeshResult = await generateMeshesAsync({
+        pixelGrid: pixels,
+        palette,
+        pixelSize: pixelSizeMm,
+        pixelHeight: toMm(state.pixelHeight, state.unit),
+        baseHeight: state.baseEnabled ? toMm(state.baseHeight, state.unit) : 0,
+        keyhole: {
+          enabled: state.keyholeEnabled,
+          type: state.keyholeType,
+          position: state.keyholePosition,
+          holeDiameter: state.holeDiameter,
+          innerDiameter: state.innerDiameter,
+          outerDiameter: state.outerDiameter,
+        },
+        singleMeshMode: true,
+      });
+
+      console.log(`STL Export: Generated ${stlMeshResult.colorMeshes.size} meshes, keyhole applied: ${stlMeshResult.keyholeApplied}`);
+
+      // Clone and rotate the unified mesh for export
+      for (const [, geometry] of stlMeshResult.colorMeshes) {
+        if (geometry.attributes.position) {
+          const cloned = geometry.clone();
+          rotateForPrinting(cloned);
+          rotatedGeometries.push(cloned);
+        }
+      }
+
       exportSTL(rotatedGeometries, filename);
+
+      // Clean up the STL-specific mesh result
+      for (const g of stlMeshResult.colorMeshes.values()) g.dispose();
+
       showStatus('STL file downloaded successfully!', 'success');
       trackEvent('export', {
         format: 'stl',
@@ -1222,13 +1297,77 @@ async function handleExport(): Promise<void> {
       });
 
     } else {
-      // 3MF export with base mesh and color layers
+      // 3MF export with separate base + color layers (for multi-material printing)
+      // Regenerate meshes with useUnifiedCSG=true when keyhole is enabled for manifold geometry
+      const { pixels, palette } = state.quantizedResult;
+      const contentBounds = getContentBounds(pixels);
+      const contentWidth = contentBounds.width;
+      const contentHeight = contentBounds.height;
+      const inputValueMm = toMm(state.dimensionValue, state.unit);
+      let totalWidthMm3mf: number;
+
+      if (state.setDimension === 'width') {
+        totalWidthMm3mf = inputValueMm;
+      } else {
+        const aspectRatio = contentWidth / contentHeight;
+        totalWidthMm3mf = inputValueMm * aspectRatio;
+      }
+
+      const pixelSizeMm3mf = totalWidthMm3mf / contentWidth;
+
+      // Regenerate meshes for export
+      console.log('3MF Export: Regenerating mesh with keyhole settings:', {
+        enabled: state.keyholeEnabled,
+        type: state.keyholeType,
+        position: state.keyholePosition,
+        holeDiameter: state.holeDiameter,
+      });
+
+      const exportMeshResult = await generateMeshesAsync({
+        pixelGrid: pixels,
+        palette,
+        pixelSize: pixelSizeMm3mf,
+        pixelHeight: toMm(state.pixelHeight, state.unit),
+        baseHeight: state.baseEnabled ? toMm(state.baseHeight, state.unit) : 0,
+        keyhole: {
+          enabled: state.keyholeEnabled,
+          type: state.keyholeType,
+          position: state.keyholePosition,
+          holeDiameter: state.holeDiameter,
+          innerDiameter: state.innerDiameter,
+          outerDiameter: state.outerDiameter,
+        },
+      });
+
+      console.log('3MF Export: Mesh result - keyholeApplied:', exportMeshResult.keyholeApplied);
+
+      // Clone and rotate base mesh if it exists
+      if (exportMeshResult.baseMesh && exportMeshResult.baseMesh.attributes.position) {
+        rotatedBaseMesh = exportMeshResult.baseMesh.clone();
+        rotateForPrinting(rotatedBaseMesh);
+        rotatedGeometries.push(rotatedBaseMesh);
+      }
+
+      // Clone and rotate color meshes
+      for (const [colorIndex, geometry] of exportMeshResult.colorMeshes) {
+        if (geometry.attributes.position) {
+          const cloned = geometry.clone();
+          rotateForPrinting(cloned);
+          rotatedColorGeometries.set(colorIndex, cloned);
+          rotatedGeometries.push(cloned);
+        }
+      }
+
       await export3MF(
         rotatedColorGeometries,
         rotatedBaseMesh || new THREE.BufferGeometry(),
         state.quantizedResult.palette,
         filename
       );
+
+      // Clean up the export-specific mesh result
+      if (exportMeshResult.baseMesh) exportMeshResult.baseMesh.dispose();
+      for (const g of exportMeshResult.colorMeshes.values()) g.dispose();
       showStatus('3MF file downloaded successfully!', 'success');
       trackEvent('export', {
         format: '3mf',
@@ -1735,8 +1874,35 @@ function setupEventListeners(): void {
 
     if (state.keyholeEnabled) {
       elements.keyholeOptions.classList.add('visible');
+      // Enable keyhole placement mode on the preview
+      if (state.previewController) {
+        state.previewController.enableKeyholePlacement(
+          (pos) => {
+            state.keyholePosition = pos;
+            updateKeyholeCoords();
+          },
+          () => {
+            // On drag end, regenerate mesh
+            if (state.quantizedResult && state.keyholePosition) {
+              generateAndDisplay3D();
+            }
+          },
+          {
+            type: state.keyholeType,
+            holeDiameter: state.holeDiameter,
+            innerDiameter: state.innerDiameter,
+            outerDiameter: state.outerDiameter,
+          }
+        );
+      }
     } else {
       elements.keyholeOptions.classList.remove('visible');
+      state.keyholePosition = null;
+      updateKeyholeCoords();
+      // Disable keyhole placement mode
+      if (state.previewController) {
+        state.previewController.disableKeyholePlacement();
+      }
     }
 
     if (state.quantizedResult) {
@@ -1744,11 +1910,97 @@ function setupEventListeners(): void {
     }
   });
 
-  // Keyhole position
-  elements.keyholePosition.addEventListener('change', () => {
-    state.keyholePosition = elements.keyholePosition.value as 'top-left' | 'top-center' | 'top-right';
+  // Helper to update keyhole preview config
+  function updateKeyholePreviewConfig(): void {
+    if (state.previewController && state.keyholeEnabled) {
+      state.previewController.updateKeyholeConfig({
+        type: state.keyholeType,
+        holeDiameter: state.holeDiameter,
+        innerDiameter: state.innerDiameter,
+        outerDiameter: state.outerDiameter,
+      });
+    }
+  }
 
-    if (state.quantizedResult && state.keyholeEnabled) {
+  // Keyhole type toggle
+  elements.keyholeTypeToggle.addEventListener('change', (e) => {
+    const target = e.target as HTMLInputElement;
+    if (target.type === 'radio' && target.checked) {
+      state.keyholeType = target.value as 'holepunch' | 'floating';
+
+      // Toggle settings visibility
+      if (state.keyholeType === 'holepunch') {
+        elements.holepunchSettings.classList.remove('hidden');
+        elements.floatingSettings.classList.add('hidden');
+      } else {
+        elements.holepunchSettings.classList.add('hidden');
+        elements.floatingSettings.classList.remove('hidden');
+      }
+
+      // Update toggle button active states
+      elements.keyholeTypeToggle.querySelectorAll('.toggle-option').forEach(opt => {
+        const input = opt.querySelector('input') as HTMLInputElement;
+        opt.classList.toggle('active', input.checked);
+      });
+
+      // Update preview indicator
+      updateKeyholePreviewConfig();
+
+      if (state.quantizedResult && state.keyholeEnabled && state.keyholePosition) {
+        generateAndDisplay3D();
+      }
+    }
+  });
+
+  // Hole diameter slider (holepunch)
+  elements.holeDiameterSlider.addEventListener('input', () => {
+    state.holeDiameter = parseFloat(elements.holeDiameterSlider.value);
+    elements.holeDiameterValue.textContent = `${state.holeDiameter.toFixed(1)} mm`;
+    updateKeyholePreviewConfig();
+  });
+
+  elements.holeDiameterSlider.addEventListener('change', () => {
+    if (state.quantizedResult && state.keyholeEnabled && state.keyholePosition) {
+      generateAndDisplay3D();
+    }
+  });
+
+  // Inner diameter slider (floating)
+  elements.innerDiameterSlider.addEventListener('input', () => {
+    state.innerDiameter = parseFloat(elements.innerDiameterSlider.value);
+    elements.innerDiameterValue.textContent = `${state.innerDiameter.toFixed(1)} mm`;
+
+    // Ensure outer diameter is always larger than inner
+    if (state.outerDiameter <= state.innerDiameter) {
+      state.outerDiameter = state.innerDiameter + 2;
+      elements.outerDiameterSlider.value = String(state.outerDiameter);
+      elements.outerDiameterValue.textContent = `${state.outerDiameter.toFixed(1)} mm`;
+    }
+    updateKeyholePreviewConfig();
+  });
+
+  elements.innerDiameterSlider.addEventListener('change', () => {
+    if (state.quantizedResult && state.keyholeEnabled && state.keyholePosition) {
+      generateAndDisplay3D();
+    }
+  });
+
+  // Outer diameter slider (floating)
+  elements.outerDiameterSlider.addEventListener('input', () => {
+    state.outerDiameter = parseFloat(elements.outerDiameterSlider.value);
+    elements.outerDiameterValue.textContent = `${state.outerDiameter.toFixed(1)} mm`;
+
+    // Ensure outer diameter is always larger than inner
+    if (state.outerDiameter <= state.innerDiameter) {
+      state.outerDiameter = state.innerDiameter + 2;
+      elements.outerDiameterSlider.value = String(state.outerDiameter);
+      elements.outerDiameterValue.textContent = `${state.outerDiameter.toFixed(1)} mm`;
+    }
+    updateKeyholePreviewConfig();
+  });
+
+  elements.outerDiameterSlider.addEventListener('change', () => {
+    if (state.quantizedResult && state.keyholeEnabled && state.keyholePosition) {
       generateAndDisplay3D();
     }
   });

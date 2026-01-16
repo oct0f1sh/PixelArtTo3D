@@ -1,11 +1,25 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
+export interface KeyholePreviewConfig {
+  type: 'holepunch' | 'floating';
+  holeDiameter: number;
+  innerDiameter: number;
+  outerDiameter: number;
+}
+
 export interface PreviewController {
   updateMesh(meshes: THREE.Mesh[]): void;
   dispose(): void;
   resetCamera(): void;
   setUnit(unit: 'mm' | 'inches'): void;
+  enableKeyholePlacement(
+    onPositionChange: (pos: { x: number; y: number }) => void,
+    onDragEnd: () => void,
+    config?: KeyholePreviewConfig
+  ): void;
+  disableKeyholePlacement(): void;
+  updateKeyholeConfig(config: KeyholePreviewConfig): void;
 }
 
 const BACKGROUND_COLOR = 0x1a1a1a;
@@ -73,6 +87,25 @@ export function initPreview(container: HTMLElement): PreviewController {
   // Track current meshes for disposal
   const currentMeshes: THREE.Mesh[] = [];
 
+  // Keyhole placement state
+  let keyholePlacementEnabled = false;
+  let keyholeOnPositionChange: ((pos: { x: number; y: number }) => void) | null = null;
+  let keyholeOnDragEnd: (() => void) | null = null;
+  let isDraggingKeyhole = false;
+  let keyholeIndicator: THREE.Mesh | null = null;
+  let keyholeConfig: KeyholePreviewConfig = {
+    type: 'holepunch',
+    holeDiameter: 4,
+    innerDiameter: 4,
+    outerDiameter: 8,
+  };
+  const raycaster = new THREE.Raycaster();
+  const mousePosition = new THREE.Vector2();
+
+  // Track model bounds for keyhole placement
+  let modelBounds: THREE.Box3 | null = null;
+  let modelHeight = 10; // Will be updated when mesh loads
+
   // Animation loop
   let animationFrameId: number;
   let isDisposed = false;
@@ -127,6 +160,130 @@ export function initPreview(container: HTMLElement): PreviewController {
     scene.add(gridHelper);
   }
 
+  // Create keyhole indicator mesh (wireframe cylinder or torus)
+  function createKeyholeIndicator(): THREE.Mesh {
+    const geometry = createIndicatorGeometry();
+    const material = new THREE.MeshBasicMaterial({
+      color: 0x00ff00,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.8,
+    });
+    const indicator = new THREE.Mesh(geometry, material);
+    indicator.visible = false;
+    scene.add(indicator);
+    return indicator;
+  }
+
+  // Create geometry for the keyhole indicator based on current config
+  function createIndicatorGeometry(): THREE.BufferGeometry {
+    const height = modelHeight + 2;
+    if (keyholeConfig.type === 'holepunch') {
+      const radius = keyholeConfig.holeDiameter / 2;
+      return new THREE.CylinderGeometry(radius, radius, height, 16);
+    } else {
+      // Floating torus
+      const tubeRadius = (keyholeConfig.outerDiameter - keyholeConfig.innerDiameter) / 4;
+      const torusRadius = (keyholeConfig.innerDiameter / 2) + tubeRadius;
+      const geometry = new THREE.TorusGeometry(torusRadius, tubeRadius, 8, 16);
+      geometry.rotateX(Math.PI / 2);
+      return geometry;
+    }
+  }
+
+  // Update keyhole indicator geometry when config changes
+  function updateKeyholeIndicatorGeometry(): void {
+    if (!keyholeIndicator) return;
+    const oldGeometry = keyholeIndicator.geometry;
+    keyholeIndicator.geometry = createIndicatorGeometry();
+    oldGeometry.dispose();
+  }
+
+  // Update keyhole indicator position based on mouse intersection
+  function updateKeyholeIndicatorPosition(event: MouseEvent): { x: number; y: number } | null {
+    if (!modelBounds || currentMeshes.length === 0) return null;
+
+    // Calculate mouse position in normalized device coordinates
+    const rect = renderer.domElement.getBoundingClientRect();
+    mousePosition.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    mousePosition.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+    // Update raycaster
+    raycaster.setFromCamera(mousePosition, camera);
+
+    // Check intersection with all meshes
+    const intersects = raycaster.intersectObjects(currentMeshes, false);
+
+    if (intersects.length > 0) {
+      const intersection = intersects[0];
+
+      // Get the intersection point in world coordinates
+      const worldPoint = intersection.point.clone();
+
+      // Account for mesh group offset to get original model coordinates
+      const modelPoint = worldPoint.clone().sub(meshGroup.position);
+
+      // Update indicator position (at model surface height)
+      if (keyholeIndicator) {
+        keyholeIndicator.position.set(worldPoint.x, worldPoint.y, worldPoint.z);
+        keyholeIndicator.visible = true;
+      }
+
+      // Return position in mm (X and Z in model space, Z maps to Y for 2D position)
+      return {
+        x: modelPoint.x,
+        y: -modelPoint.z, // Negate because Z axis is inverted in 3D view
+      };
+    }
+
+    return null;
+  }
+
+  // Mouse event handlers for keyhole placement
+  function handleMouseDown(event: MouseEvent): void {
+    if (!keyholePlacementEnabled) return;
+
+    // Only respond to left mouse button
+    if (event.button !== 0) return;
+
+    const pos = updateKeyholeIndicatorPosition(event);
+    if (pos) {
+      isDraggingKeyhole = true;
+      controls.enabled = false; // Disable orbit controls while dragging
+
+      if (keyholeOnPositionChange) {
+        keyholeOnPositionChange(pos);
+      }
+    }
+  }
+
+  function handleMouseMove(event: MouseEvent): void {
+    if (!keyholePlacementEnabled) return;
+
+    const pos = updateKeyholeIndicatorPosition(event);
+
+    if (isDraggingKeyhole && pos && keyholeOnPositionChange) {
+      keyholeOnPositionChange(pos);
+    }
+  }
+
+  function handleMouseUp(): void {
+    if (!keyholePlacementEnabled || !isDraggingKeyhole) return;
+
+    isDraggingKeyhole = false;
+    controls.enabled = true; // Re-enable orbit controls
+
+    if (keyholeOnDragEnd) {
+      keyholeOnDragEnd();
+    }
+  }
+
+  // Add mouse event listeners
+  renderer.domElement.addEventListener('mousedown', handleMouseDown);
+  renderer.domElement.addEventListener('mousemove', handleMouseMove);
+  renderer.domElement.addEventListener('mouseup', handleMouseUp);
+  renderer.domElement.addEventListener('mouseleave', handleMouseUp);
+
   // Controller methods
   function updateMesh(meshes: THREE.Mesh[]): void {
     // Clear existing meshes
@@ -174,6 +331,15 @@ export function initPreview(container: HTMLElement): PreviewController {
     // Center the mesh group so it sits on the grid (Y=0)
     meshGroup.position.set(-center.x, -boundingBox.min.y, -center.z);
 
+    // Store model bounds for keyhole placement
+    modelBounds = boundingBox.clone();
+    modelHeight = size.y;
+
+    // Update keyhole indicator size if it exists
+    if (keyholeIndicator) {
+      updateKeyholeIndicatorGeometry();
+    }
+
     // Create grid beneath the model
     updateGrid(boundingBox);
   }
@@ -219,6 +385,12 @@ export function initPreview(container: HTMLElement): PreviewController {
     window.removeEventListener('resize', handleResize);
     resizeObserver.disconnect();
 
+    // Remove mouse event listeners
+    renderer.domElement.removeEventListener('mousedown', handleMouseDown);
+    renderer.domElement.removeEventListener('mousemove', handleMouseMove);
+    renderer.domElement.removeEventListener('mouseup', handleMouseUp);
+    renderer.domElement.removeEventListener('mouseleave', handleMouseUp);
+
     // Dispose controls
     controls.dispose();
 
@@ -233,6 +405,14 @@ export function initPreview(container: HTMLElement): PreviewController {
       }
     });
     currentMeshes.length = 0;
+
+    // Dispose keyhole indicator
+    if (keyholeIndicator) {
+      scene.remove(keyholeIndicator);
+      keyholeIndicator.geometry.dispose();
+      (keyholeIndicator.material as THREE.Material).dispose();
+      keyholeIndicator = null;
+    }
 
     // Dispose grid
     if (gridHelper) {
@@ -250,10 +430,62 @@ export function initPreview(container: HTMLElement): PreviewController {
     }
   }
 
+  function enableKeyholePlacement(
+    onPositionChange: (pos: { x: number; y: number }) => void,
+    onDragEnd: () => void,
+    config?: KeyholePreviewConfig
+  ): void {
+    keyholePlacementEnabled = true;
+    keyholeOnPositionChange = onPositionChange;
+    keyholeOnDragEnd = onDragEnd;
+
+    // Update config if provided
+    if (config) {
+      keyholeConfig = config;
+    }
+
+    // Create indicator if not exists
+    if (!keyholeIndicator) {
+      keyholeIndicator = createKeyholeIndicator();
+    } else {
+      // Update geometry to match config
+      updateKeyholeIndicatorGeometry();
+    }
+
+    // Change cursor to indicate placement mode
+    renderer.domElement.style.cursor = 'crosshair';
+  }
+
+  function disableKeyholePlacement(): void {
+    keyholePlacementEnabled = false;
+    keyholeOnPositionChange = null;
+    keyholeOnDragEnd = null;
+    isDraggingKeyhole = false;
+    controls.enabled = true;
+
+    // Hide indicator
+    if (keyholeIndicator) {
+      keyholeIndicator.visible = false;
+    }
+
+    // Reset cursor
+    renderer.domElement.style.cursor = '';
+  }
+
+  function updateKeyholeConfig(config: KeyholePreviewConfig): void {
+    keyholeConfig = config;
+    if (keyholeIndicator) {
+      updateKeyholeIndicatorGeometry();
+    }
+  }
+
   return {
     updateMesh,
     dispose,
     resetCamera,
     setUnit,
+    enableKeyholePlacement,
+    disableKeyholePlacement,
+    updateKeyholeConfig,
   };
 }

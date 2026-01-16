@@ -371,42 +371,6 @@
               </div>
             </div>
           </article>
-
-          <!-- Keyhole Settings Panel -->
-          <article class="panel" id="keyhole-panel">
-            <header class="panel-header" data-collapse="keyhole-content">
-              <h2>Keyhole Options</h2>
-              <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="6 9 12 15 18 9"></polyline>
-              </svg>
-            </header>
-
-            <div class="panel-content" id="keyhole-content">
-              <div class="control-group">
-                <label class="checkbox-group">
-                  <input
-                    type="checkbox"
-                    id="keyhole-toggle"
-                    class="checkbox-input"
-                  />
-                  <span class="checkbox-label">Add keyhole for hanging</span>
-                </label>
-              </div>
-
-              <div class="keyhole-options" id="keyhole-options">
-                <div class="control-group">
-                  <label class="control-label" for="keyhole-position">
-                    Keyhole Position
-                  </label>
-                  <select id="keyhole-position">
-                    <option value="top-left">Top Left</option>
-                    <option value="top-center" selected>Top Center</option>
-                    <option value="top-right">Top Right</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-          </article>
         </section>
 
         <!-- Right Column: Preview and Export -->
@@ -433,6 +397,91 @@
                 <button type="button" class="canvas-control-btn" id="reset-view-btn">
                   Reset View
                 </button>
+              </div>
+
+              <!-- Keyhole Options -->
+              <div class="keyhole-section">
+                <div class="keyhole-header">
+                  <label class="checkbox-group">
+                    <input
+                      type="checkbox"
+                      id="keyhole-toggle"
+                      class="checkbox-input"
+                    />
+                    <span class="checkbox-label">Add Keyhole</span>
+                  </label>
+                </div>
+
+                <div class="keyhole-options" id="keyhole-options">
+                  <!-- Keyhole Type Selector -->
+                  <div class="control-group">
+                    <div class="toggle-group compact" id="keyhole-type-toggle">
+                      <label class="toggle-option active">
+                        <input type="radio" name="keyhole-type" value="holepunch" checked />
+                        <span>Holepunch</span>
+                      </label>
+                      <label class="toggle-option">
+                        <input type="radio" name="keyhole-type" value="floating" />
+                        <span>Floating</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <!-- Holepunch Settings -->
+                  <div class="keyhole-type-settings" id="holepunch-settings">
+                    <div class="control-group compact">
+                      <label class="control-label" for="hole-diameter-slider">Diameter</label>
+                      <div class="range-container">
+                        <input
+                          type="range"
+                          id="hole-diameter-slider"
+                          min="2"
+                          max="8"
+                          step="0.5"
+                          value="4"
+                        />
+                        <span class="range-value" id="hole-diameter-value">4.0 mm</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Floating Settings -->
+                  <div class="keyhole-type-settings hidden" id="floating-settings">
+                    <div class="control-group compact">
+                      <label class="control-label" for="inner-diameter-slider">Inner</label>
+                      <div class="range-container">
+                        <input
+                          type="range"
+                          id="inner-diameter-slider"
+                          min="2"
+                          max="8"
+                          step="0.5"
+                          value="4"
+                        />
+                        <span class="range-value" id="inner-diameter-value">4.0 mm</span>
+                      </div>
+                    </div>
+                    <div class="control-group compact">
+                      <label class="control-label" for="outer-diameter-slider">Outer</label>
+                      <div class="range-container">
+                        <input
+                          type="range"
+                          id="outer-diameter-slider"
+                          min="4"
+                          max="12"
+                          step="0.5"
+                          value="8"
+                        />
+                        <span class="range-value" id="outer-diameter-value">8.0 mm</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Position Info -->
+                  <div class="keyhole-position-info">
+                    <p class="keyhole-coords" id="keyhole-coords">Click on model to place</p>
+                  </div>
+                </div>
               </div>
             </div>
           </article>

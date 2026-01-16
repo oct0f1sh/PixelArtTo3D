@@ -1042,18 +1042,75 @@ input[type="color"]::-moz-color-swatch {
 }
 
 /* ================================================
-   Keyhole Options
+   Keyhole Options (in 3D Preview panel)
    ================================================ */
+
+.keyhole-section {
+  margin-top: var(--spacing-md);
+  padding: var(--spacing-md);
+  background-color: var(--bg-elevated);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+
+.keyhole-header {
+  margin-bottom: 0;
+}
+
+.keyhole-header .checkbox-label {
+  font-weight: 500;
+}
 
 .keyhole-options {
   display: none;
-  margin-top: var(--spacing-md);
-  padding-top: var(--spacing-md);
+  margin-top: var(--spacing-sm);
+  padding-top: var(--spacing-sm);
   border-top: 1px solid var(--border);
 }
 
 .keyhole-options.visible {
   display: block;
+}
+
+.keyhole-options .toggle-group.compact {
+  margin-bottom: var(--spacing-sm);
+}
+
+.keyhole-type-settings {
+  margin-top: var(--spacing-xs);
+}
+
+.keyhole-type-settings.hidden {
+  display: none;
+}
+
+.keyhole-type-settings .control-group.compact {
+  margin-bottom: var(--spacing-xs);
+}
+
+.keyhole-type-settings .control-group.compact:last-child {
+  margin-bottom: 0;
+}
+
+.keyhole-type-settings .control-label {
+  font-size: var(--font-size-sm);
+  min-width: 50px;
+}
+
+.keyhole-position-info {
+  margin-top: var(--spacing-sm);
+  text-align: center;
+}
+
+.keyhole-coords {
+  font-size: var(--font-size-sm);
+  color: var(--text-tertiary);
+  margin: 0;
+  font-family: var(--font-mono);
+}
+
+.keyhole-coords.has-position {
+  color: var(--primary);
 }
 
 /* ================================================
