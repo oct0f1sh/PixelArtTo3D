@@ -1039,28 +1039,31 @@ function drawCropOverlay(): void {
   canvas.width = containerRect.width;
   canvas.height = containerRect.height;
 
-  // Clear canvas
+  // Clear canvas - image shows through normally until a selection is made
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // Draw semi-transparent overlay over entire area
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
   if (state.cropRegion) {
-    // Convert crop region to screen coordinates
-    const topLeft = imageToScreenCoords(state.cropRegion.startX, state.cropRegion.startY);
-    const bottomRight = imageToScreenCoords(state.cropRegion.endX, state.cropRegion.endY);
+    // Normalize crop region coordinates (handle reverse-drawn rectangles)
+    const minX = Math.min(state.cropRegion.startX, state.cropRegion.endX);
+    const maxX = Math.max(state.cropRegion.startX, state.cropRegion.endX);
+    const minY = Math.min(state.cropRegion.startY, state.cropRegion.endY);
+    const maxY = Math.max(state.cropRegion.startY, state.cropRegion.endY);
 
-    // Adjust for container position
-    const left = topLeft.x - containerRect.left;
-    const top = topLeft.y - containerRect.top;
-    const right = bottomRight.x - containerRect.left;
-    const bottom = bottomRight.y - containerRect.top;
+    // Convert crop region to screen coordinates (relative to container)
+    const topLeft = imageToScreenCoords(minX, minY);
+    const bottomRight = imageToScreenCoords(maxX, maxY);
+
+    // imageToScreenCoords returns container-relative coordinates, use directly
+    const left = topLeft.x;
+    const top = topLeft.y;
+    const right = bottomRight.x;
+    const bottom = bottomRight.y;
     const width = right - left;
     const height = bottom - top;
 
-    // Clear the crop region (make it transparent)
-    ctx.clearRect(left, top, width, height);
+    // Draw gray highlight on the selected crop area
+    ctx.fillStyle = 'rgba(100, 100, 100, 0.4)';
+    ctx.fillRect(left, top, width, height);
 
     // Draw selection border
     ctx.strokeStyle = '#4a9eff';
@@ -1100,8 +1103,20 @@ function drawCropOverlay(): void {
 function getCropHandleAtPosition(screenX: number, screenY: number): 'none' | 'move' | 'nw' | 'ne' | 'sw' | 'se' | 'n' | 's' | 'e' | 'w' {
   if (!state.cropRegion) return 'none';
 
-  const topLeft = imageToScreenCoords(state.cropRegion.startX, state.cropRegion.startY);
-  const bottomRight = imageToScreenCoords(state.cropRegion.endX, state.cropRegion.endY);
+  // Convert screen coordinates to container-relative coordinates
+  const container = elements.inputPreviewContainer;
+  const containerRect = container.getBoundingClientRect();
+  const relX = screenX - containerRect.left;
+  const relY = screenY - containerRect.top;
+
+  // Normalize crop region coordinates
+  const minX = Math.min(state.cropRegion.startX, state.cropRegion.endX);
+  const maxX = Math.max(state.cropRegion.startX, state.cropRegion.endX);
+  const minY = Math.min(state.cropRegion.startY, state.cropRegion.endY);
+  const maxY = Math.max(state.cropRegion.startY, state.cropRegion.endY);
+
+  const topLeft = imageToScreenCoords(minX, minY);
+  const bottomRight = imageToScreenCoords(maxX, maxY);
 
   const left = topLeft.x;
   const top = topLeft.y;
@@ -1113,19 +1128,19 @@ function getCropHandleAtPosition(screenX: number, screenY: number): 'none' | 'mo
   const handleSize = 16; // Hit area for handles
 
   // Check corner handles first
-  if (Math.abs(screenX - left) < handleSize && Math.abs(screenY - top) < handleSize) return 'nw';
-  if (Math.abs(screenX - right) < handleSize && Math.abs(screenY - top) < handleSize) return 'ne';
-  if (Math.abs(screenX - left) < handleSize && Math.abs(screenY - bottom) < handleSize) return 'sw';
-  if (Math.abs(screenX - right) < handleSize && Math.abs(screenY - bottom) < handleSize) return 'se';
+  if (Math.abs(relX - left) < handleSize && Math.abs(relY - top) < handleSize) return 'nw';
+  if (Math.abs(relX - right) < handleSize && Math.abs(relY - top) < handleSize) return 'ne';
+  if (Math.abs(relX - left) < handleSize && Math.abs(relY - bottom) < handleSize) return 'sw';
+  if (Math.abs(relX - right) < handleSize && Math.abs(relY - bottom) < handleSize) return 'se';
 
   // Check edge handles
-  if (Math.abs(screenX - (left + width / 2)) < handleSize && Math.abs(screenY - top) < handleSize) return 'n';
-  if (Math.abs(screenX - (left + width / 2)) < handleSize && Math.abs(screenY - bottom) < handleSize) return 's';
-  if (Math.abs(screenX - left) < handleSize && Math.abs(screenY - (top + height / 2)) < handleSize) return 'w';
-  if (Math.abs(screenX - right) < handleSize && Math.abs(screenY - (top + height / 2)) < handleSize) return 'e';
+  if (Math.abs(relX - (left + width / 2)) < handleSize && Math.abs(relY - top) < handleSize) return 'n';
+  if (Math.abs(relX - (left + width / 2)) < handleSize && Math.abs(relY - bottom) < handleSize) return 's';
+  if (Math.abs(relX - left) < handleSize && Math.abs(relY - (top + height / 2)) < handleSize) return 'w';
+  if (Math.abs(relX - right) < handleSize && Math.abs(relY - (top + height / 2)) < handleSize) return 'e';
 
   // Check if inside selection (for move)
-  if (screenX > left && screenX < right && screenY > top && screenY < bottom) return 'move';
+  if (relX > left && relX < right && relY > top && relY < bottom) return 'move';
 
   return 'none';
 }
@@ -2963,6 +2978,10 @@ function setupEventListeners(): void {
   });
 
   // Crop overlay mouse events
+  let cropClickedOutside = false; // Track if we clicked outside to clear on mouseup
+  let cropPanning = false; // Track if we're panning instead of cropping
+  let cropPanStart = { x: 0, y: 0 };
+
   elements.cropOverlay.addEventListener('mousedown', (e) => {
     if (!state.cropMode) return;
     e.preventDefault();
@@ -2971,7 +2990,9 @@ function setupEventListeners(): void {
     const handle = getCropHandleAtPosition(e.clientX, e.clientY);
 
     if (handle !== 'none' && state.cropRegion) {
-      // Start dragging existing region
+      // Start dragging existing region (move or resize)
+      cropClickedOutside = false;
+      cropPanning = false;
       state.cropDragging = true;
       state.cropDragHandle = handle;
       state.cropDragStart = {
@@ -2979,8 +3000,17 @@ function setupEventListeners(): void {
         y: e.clientY,
         region: { ...state.cropRegion }
       };
+    } else if (state.cropRegion) {
+      // Clicked outside existing crop box - allow pan, clear on click (not drag)
+      cropClickedOutside = true;
+      cropPanning = true;
+      cropPanStart = { x: e.clientX - state.inputPan.x, y: e.clientY - state.inputPan.y };
+      state.cropDragging = false;
+      elements.cropOverlay.style.cursor = 'grabbing';
     } else {
-      // Start new selection
+      // No existing crop box - start new selection
+      cropClickedOutside = false;
+      cropPanning = false;
       const imageCoords = screenToImageCoords(e.clientX, e.clientY);
       state.cropDragging = true;
       state.cropDragHandle = 'se'; // New selections drag the SE corner
@@ -2995,11 +3025,27 @@ function setupEventListeners(): void {
         y: e.clientY,
         region: { ...state.cropRegion }
       };
+      // Draw immediately so user sees the selection start
+      drawCropOverlay();
     }
   });
 
   elements.cropOverlay.addEventListener('mousemove', (e) => {
     if (!state.cropMode) return;
+
+    // Handle panning when dragging outside crop box
+    if (cropPanning) {
+      cropClickedOutside = false; // User is dragging, don't clear crop on mouseup
+      state.inputPan.x = e.clientX - cropPanStart.x;
+      state.inputPan.y = e.clientY - cropPanStart.y;
+      elements.previewImage.style.transform = `translate(${state.inputPan.x}px, ${state.inputPan.y}px) scale(${state.inputZoom})`;
+      if (state.pixelGridVisible) {
+        requestAnimationFrame(() => updatePixelGridOverlay());
+      }
+      // Update crop overlay position
+      drawCropOverlay();
+      return;
+    }
 
     if (state.cropDragging && state.cropDragStart.region) {
       const img = elements.previewImage;
@@ -3080,6 +3126,21 @@ function setupEventListeners(): void {
   });
 
   elements.cropOverlay.addEventListener('mouseup', () => {
+    // Reset panning state
+    if (cropPanning) {
+      cropPanning = false;
+      elements.cropOverlay.style.cursor = 'crosshair';
+    }
+
+    if (cropClickedOutside) {
+      // Clicked outside crop box without dragging - clear the selection
+      state.cropRegion = null;
+      elements.cropApplyBtn.disabled = true;
+      drawCropOverlay();
+      cropClickedOutside = false;
+      return;
+    }
+
     if (state.cropDragging) {
       state.cropDragging = false;
       state.cropDragHandle = 'none';
@@ -3097,6 +3158,11 @@ function setupEventListeners(): void {
     if (state.cropDragging) {
       state.cropDragging = false;
       state.cropDragHandle = 'none';
+    }
+    if (cropPanning) {
+      cropPanning = false;
+      cropClickedOutside = false;
+      elements.cropOverlay.style.cursor = 'crosshair';
     }
   });
 

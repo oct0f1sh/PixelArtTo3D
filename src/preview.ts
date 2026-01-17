@@ -233,16 +233,18 @@ export function initPreview(container: HTMLElement): PreviewController {
     return new THREE.CylinderGeometry(radius, radius, height, 16);
   }
 
-  // Create a magnet indicator mesh (wireframe for hover, solid for placed)
+  // Create a magnet indicator mesh (always wireframe, renders through objects)
   function createMagnetIndicatorMesh(isHover: boolean): THREE.Mesh {
     const geometry = createMagnetIndicatorGeometry();
     const material = new THREE.MeshBasicMaterial({
       color: isHover ? 0xff8800 : 0xff6600, // Orange
-      wireframe: isHover,
+      wireframe: true, // Always wireframe so it's visible through objects
       transparent: true,
-      opacity: isHover ? 0.6 : 0.8,
+      opacity: isHover ? 0.6 : 0.9,
+      depthTest: false, // Render through other objects
     });
     const indicator = new THREE.Mesh(geometry, material);
+    indicator.renderOrder = 999; // Render on top
     indicator.visible = false;
     scene.add(indicator);
     return indicator;
