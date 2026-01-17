@@ -85,17 +85,17 @@ Full undo/redo support for most actions:
 
 ## Testing
 
-Tests in `src/manifold.test.ts` verify mesh geometry is valid for 3D printing. They analyze edge usage to ensure:
-- Zero non-manifold edges (used by >2 faces)
-- Zero boundary edges (used by only 1 face)
+Test files:
+- `src/manifold.test.ts` - Verifies mesh geometry is valid for 3D printing (zero non-manifold/boundary edges)
+- `src/holepunch-manifold.test.ts` - Tests keyhole punch CSG operations maintain manifold geometry
+- `src/magnet-manifold.test.ts` - Tests magnet compartment CSG operations maintain manifold geometry
+- `src/merged-mesh.test.ts` - Tests merged mesh generation for STL export
+- `src/imageProcessing.test.ts` - Tests background removal, pixel scale detection, color accuracy
 
-Tests in `src/imageProcessing.test.ts` verify:
-- Background removal with flood-fill behavior
-- Pixel scale detection for upscaled images
-- Color accuracy after downscaling
-- Non-uniform scale detection
-
-Test images are located in `test-resources/` directory (e.g., `test-resources/queen.png`, `test-resources/ral.png`, `test-resources/ral2.jpg`).
+Test images are located in `test-resources/` directory:
+- `queen.png` - Native resolution pixel art
+- `ral.png` - Small pixel art test image
+- `ral2.jpg` - Upscaled pixel art for scale detection tests
 
 ## Default Values
 
