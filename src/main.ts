@@ -2124,22 +2124,38 @@ function setupEventListeners(): void {
     }
   });
 
-  // Scroll to zoom on input image
+  // Scroll to zoom on input image (zoom toward center of preview area)
   elements.previewImage.parentElement?.addEventListener('wheel', (e) => {
     e.preventDefault();
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    state.inputZoom = Math.max(0.5, Math.min(10, state.inputZoom * delta));
+    const oldZoom = state.inputZoom;
+    const newZoom = Math.max(0.5, Math.min(50, oldZoom * delta));
+
+    // Adjust pan to keep the center of the preview area fixed
+    // The pan offset needs to scale proportionally with the zoom change
+    const zoomRatio = newZoom / oldZoom;
+    state.inputPan.x *= zoomRatio;
+    state.inputPan.y *= zoomRatio;
+    state.inputZoom = newZoom;
+
     elements.previewImage.style.transform = `translate(${state.inputPan.x}px, ${state.inputPan.y}px) scale(${state.inputZoom})`;
     if (state.pixelGridVisible) {
       requestAnimationFrame(() => updatePixelGridOverlay());
     }
   }, { passive: false });
 
-  // Scroll to zoom on output image
+  // Scroll to zoom on output image (zoom toward center of preview area)
   elements.outputPreviewImage.parentElement?.addEventListener('wheel', (e) => {
     e.preventDefault();
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    state.outputZoom = Math.max(0.5, Math.min(10, state.outputZoom * delta));
+    const oldZoom = state.outputZoom;
+    const newZoom = Math.max(0.5, Math.min(50, oldZoom * delta));
+
+    // Adjust pan to keep the center of the preview area fixed
+    const zoomRatio = newZoom / oldZoom;
+    state.outputPan.x *= zoomRatio;
+    state.outputPan.y *= zoomRatio;
+    state.outputZoom = newZoom;
     elements.outputPreviewImage.style.transform = `translate(${state.outputPan.x}px, ${state.outputPan.y}px) scale(${state.outputZoom})`;
     if (state.outputGridVisible) {
       requestAnimationFrame(() => updateOutputGridOverlay());
