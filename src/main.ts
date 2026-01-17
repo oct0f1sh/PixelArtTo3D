@@ -217,6 +217,317 @@ const state: AppState = {
 const MM_PER_INCH = 25.4;
 
 // ============================================================================
+// Undo/Redo System
+// ============================================================================
+
+interface UndoableState {
+  originalImageData: ImageData | null;
+  quantizedResult: QuantizedResult | null;
+  bgRemoveEnabled: boolean;
+  bgColor: { r: number; g: number; b: number } | null;
+  bgTolerance: number;
+  colorReduceEnabled: boolean;
+  colorReduceTarget: number;
+  manuallyDeletedColors: Array<{ color: { r: number; g: number; b: number; hex: string }; pixels: Array<{ x: number; y: number }> }>;
+  autoDeletedColors: Array<{ color: { r: number; g: number; b: number; hex: string }; pixels: Array<{ x: number; y: number }> }>;
+  unit: 'mm' | 'inches';
+  setDimension: 'width' | 'height';
+  dimensionValue: number;
+  pixelHeight: number;
+  baseEnabled: boolean;
+  baseHeight: number;
+  baseColor: string;
+  keyholeEnabled: boolean;
+  keyholeType: 'holepunch' | 'floating';
+  keyholePosition: { x: number; y: number } | null;
+  holeDiameter: number;
+  innerDiameter: number;
+  outerDiameter: number;
+  magnetEnabled: boolean;
+  magnetPositions: Array<{ x: number; y: number }>;
+  magnetPreset: 'small' | 'medium' | 'large' | 'custom';
+  magnetDiameter: number;
+  magnetHeight: number;
+  magnetDepth: number;
+  magnetCenterDepth: boolean;
+}
+
+const MAX_UNDO_HISTORY = 50;
+const undoStack: UndoableState[] = [];
+const redoStack: UndoableState[] = [];
+
+/**
+ * Deep clones ImageData
+ */
+function cloneImageData(imageData: ImageData | null): ImageData | null {
+  if (!imageData) return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = imageData.width;
+  canvas.height = imageData.height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  ctx.putImageData(imageData, 0, 0);
+  return ctx.getImageData(0, 0, canvas.width, canvas.height);
+}
+
+/**
+ * Creates a snapshot of the current undoable state
+ */
+function captureUndoableState(): UndoableState {
+  return {
+    originalImageData: cloneImageData(state.originalImageData),
+    quantizedResult: state.quantizedResult ? {
+      palette: state.quantizedResult.palette.map(c => ({ ...c })),
+      pixels: state.quantizedResult.pixels.map(row => [...row]),
+      width: state.quantizedResult.width,
+      height: state.quantizedResult.height,
+    } : null,
+    bgRemoveEnabled: state.bgRemoveEnabled,
+    bgColor: state.bgColor ? { ...state.bgColor } : null,
+    bgTolerance: state.bgTolerance,
+    colorReduceEnabled: state.colorReduceEnabled,
+    colorReduceTarget: state.colorReduceTarget,
+    manuallyDeletedColors: state.manuallyDeletedColors.map(d => ({
+      color: { ...d.color },
+      pixels: d.pixels.map(p => ({ ...p })),
+    })),
+    autoDeletedColors: state.autoDeletedColors.map(d => ({
+      color: { ...d.color },
+      pixels: d.pixels.map(p => ({ ...p })),
+    })),
+    unit: state.unit,
+    setDimension: state.setDimension,
+    dimensionValue: state.dimensionValue,
+    pixelHeight: state.pixelHeight,
+    baseEnabled: state.baseEnabled,
+    baseHeight: state.baseHeight,
+    baseColor: state.baseColor,
+    keyholeEnabled: state.keyholeEnabled,
+    keyholeType: state.keyholeType,
+    keyholePosition: state.keyholePosition ? { ...state.keyholePosition } : null,
+    holeDiameter: state.holeDiameter,
+    innerDiameter: state.innerDiameter,
+    outerDiameter: state.outerDiameter,
+    magnetEnabled: state.magnetEnabled,
+    magnetPositions: state.magnetPositions.map(p => ({ ...p })),
+    magnetPreset: state.magnetPreset,
+    magnetDiameter: state.magnetDiameter,
+    magnetHeight: state.magnetHeight,
+    magnetDepth: state.magnetDepth,
+    magnetCenterDepth: state.magnetCenterDepth,
+  };
+}
+
+/**
+ * Saves the current state to the undo stack
+ */
+function saveUndoState(): void {
+  const snapshot = captureUndoableState();
+  undoStack.push(snapshot);
+
+  // Limit history size
+  if (undoStack.length > MAX_UNDO_HISTORY) {
+    undoStack.shift();
+  }
+
+  // Clear redo stack when new action is taken
+  redoStack.length = 0;
+}
+
+/**
+ * Restores state from a snapshot
+ */
+function restoreState(snapshot: UndoableState): void {
+  state.originalImageData = cloneImageData(snapshot.originalImageData);
+  state.quantizedResult = snapshot.quantizedResult ? {
+    palette: snapshot.quantizedResult.palette.map(c => ({ ...c })),
+    pixels: snapshot.quantizedResult.pixels.map(row => [...row]),
+    width: snapshot.quantizedResult.width,
+    height: snapshot.quantizedResult.height,
+  } : null;
+  state.bgRemoveEnabled = snapshot.bgRemoveEnabled;
+  state.bgColor = snapshot.bgColor ? { ...snapshot.bgColor } : null;
+  state.bgTolerance = snapshot.bgTolerance;
+  state.colorReduceEnabled = snapshot.colorReduceEnabled;
+  state.colorReduceTarget = snapshot.colorReduceTarget;
+  state.manuallyDeletedColors = snapshot.manuallyDeletedColors.map(d => ({
+    color: { ...d.color },
+    pixels: d.pixels.map(p => ({ ...p })),
+  }));
+  state.autoDeletedColors = snapshot.autoDeletedColors.map(d => ({
+    color: { ...d.color },
+    pixels: d.pixels.map(p => ({ ...p })),
+  }));
+  state.unit = snapshot.unit;
+  state.setDimension = snapshot.setDimension;
+  state.dimensionValue = snapshot.dimensionValue;
+  state.pixelHeight = snapshot.pixelHeight;
+  state.baseEnabled = snapshot.baseEnabled;
+  state.baseHeight = snapshot.baseHeight;
+  state.baseColor = snapshot.baseColor;
+  state.keyholeEnabled = snapshot.keyholeEnabled;
+  state.keyholeType = snapshot.keyholeType;
+  state.keyholePosition = snapshot.keyholePosition ? { ...snapshot.keyholePosition } : null;
+  state.holeDiameter = snapshot.holeDiameter;
+  state.innerDiameter = snapshot.innerDiameter;
+  state.outerDiameter = snapshot.outerDiameter;
+  state.magnetEnabled = snapshot.magnetEnabled;
+  state.magnetPositions = snapshot.magnetPositions.map(p => ({ ...p }));
+  state.magnetPreset = snapshot.magnetPreset;
+  state.magnetDiameter = snapshot.magnetDiameter;
+  state.magnetHeight = snapshot.magnetHeight;
+  state.magnetDepth = snapshot.magnetDepth;
+  state.magnetCenterDepth = snapshot.magnetCenterDepth;
+}
+
+/**
+ * Undoes the last action
+ */
+async function undo(): Promise<void> {
+  if (undoStack.length === 0) return;
+
+  // Save current state to redo stack
+  redoStack.push(captureUndoableState());
+
+  // Restore previous state
+  const previousState = undoStack.pop()!;
+  restoreState(previousState);
+
+  // Update UI
+  await refreshUIFromState();
+}
+
+/**
+ * Redoes the last undone action
+ */
+async function redo(): Promise<void> {
+  if (redoStack.length === 0) return;
+
+  // Save current state to undo stack
+  undoStack.push(captureUndoableState());
+
+  // Restore redo state
+  const redoState = redoStack.pop()!;
+  restoreState(redoState);
+
+  // Update UI
+  await refreshUIFromState();
+}
+
+/**
+ * Refreshes all UI elements to match the current state
+ */
+async function refreshUIFromState(): Promise<void> {
+  // Update image preview
+  if (state.originalImageData) {
+    const canvas = document.createElement('canvas');
+    canvas.width = state.originalImageData.width;
+    canvas.height = state.originalImageData.height;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.putImageData(state.originalImageData, 0, 0);
+      elements.previewImage.src = canvas.toDataURL('image/png');
+    }
+    elements.imageDimensions.textContent = `${state.originalImageData.width} x ${state.originalImageData.height} px`;
+    elements.dropZone.style.display = 'none';
+    elements.imagePreview.classList.add('visible');
+  }
+
+  // Update background removal UI
+  elements.bgRemoveToggle.checked = state.bgRemoveEnabled;
+  if (state.bgRemoveEnabled) {
+    elements.bgRemoveOptions.classList.add('visible');
+  } else {
+    elements.bgRemoveOptions.classList.remove('visible');
+  }
+  elements.bgToleranceSlider.value = String(state.bgTolerance);
+  elements.bgToleranceValue.textContent = String(state.bgTolerance);
+  updateBgColorPreview(state.bgColor);
+
+  // Update color reduction UI
+  elements.colorReduceToggle.checked = state.colorReduceEnabled;
+  if (state.colorReduceEnabled) {
+    elements.colorReduceOptions.classList.remove('hidden');
+  } else {
+    elements.colorReduceOptions.classList.add('hidden');
+  }
+  elements.colorReduceSlider.value = String(state.colorReduceTarget);
+  elements.colorReduceInput.value = String(state.colorReduceTarget);
+
+  // Update dimension UI
+  elements.dimensionInput.value = String(state.dimensionValue);
+  elements.dimensionInputLabel.textContent = state.setDimension === 'width' ? 'Width' : 'Height';
+  elements.dimensionUnitLabel.textContent = state.unit;
+
+  // Update height settings UI
+  elements.pixelHeightSlider.value = String(state.pixelHeight);
+  elements.pixelHeightValue.textContent = state.pixelHeight.toFixed(state.unit === 'inches' ? 2 : 1);
+  elements.baseToggle.checked = state.baseEnabled;
+  if (state.baseEnabled) {
+    elements.baseOptions.classList.remove('hidden');
+  } else {
+    elements.baseOptions.classList.add('hidden');
+  }
+  elements.baseHeightSlider.value = String(state.baseHeight);
+  elements.baseHeightValue.textContent = state.baseHeight.toFixed(state.unit === 'inches' ? 2 : 1);
+  elements.baseColorInput.value = state.baseColor;
+  elements.baseColorValue.textContent = state.baseColor;
+
+  // Update keyhole UI
+  elements.keyholeToggle.checked = state.keyholeEnabled;
+  if (state.keyholeEnabled) {
+    elements.keyholeOptions.classList.add('visible');
+  } else {
+    elements.keyholeOptions.classList.remove('visible');
+  }
+
+  // Update magnet UI
+  elements.magnetToggle.checked = state.magnetEnabled;
+  if (state.magnetEnabled) {
+    elements.magnetOptions.classList.add('visible');
+  } else {
+    elements.magnetOptions.classList.remove('visible');
+  }
+  elements.magnetDiameterSlider.value = String(state.magnetDiameter);
+  elements.magnetDiameterValue.value = state.magnetDiameter.toFixed(1);
+  elements.magnetHeightSlider.value = String(state.magnetHeight);
+  elements.magnetHeightValue.value = state.magnetHeight.toFixed(1);
+  elements.magnetDepthSlider.value = String(state.magnetDepth);
+  elements.magnetDepthValue.value = state.magnetDepth.toFixed(1);
+  elements.magnetCenterToggle.checked = state.magnetCenterDepth;
+  elements.depthSliderContainer.classList.toggle('disabled', state.magnetCenterDepth);
+
+  // Update unit toggle
+  elements.unitToggle.querySelectorAll('.toggle-option').forEach(opt => {
+    const input = opt.querySelector('input') as HTMLInputElement;
+    opt.classList.toggle('active', input.value === state.unit);
+  });
+
+  // Update dimension toggle
+  elements.dimensionToggle.querySelectorAll('.toggle-option').forEach(opt => {
+    const input = opt.querySelector('input') as HTMLInputElement;
+    opt.classList.toggle('active', input.value === state.setDimension);
+  });
+
+  // Update previews and 3D model
+  if (state.quantizedResult) {
+    const quantizedImageData = quantizedResultToImageData(state.quantizedResult);
+    updateOutputPreview(quantizedImageData);
+    updateColorPalette();
+    updateDimensionsDisplay();
+    await generateAndDisplay3D();
+    elements.downloadBtn.disabled = false;
+  }
+
+  // Update magnet indicators
+  if (state.previewController && state.magnetEnabled) {
+    state.previewController.setMagnetPositions(state.magnetPositions);
+  }
+  updateMagnetCount();
+  updateMagnetBufferInfo();
+}
+
+// ============================================================================
 // DOM Elements
 // ============================================================================
 
@@ -900,6 +1211,11 @@ function showUrlStatus(message: string, type: 'error' | 'success' | ''): void {
  * Handles loading an image from a URL
  */
 async function handleImageUrl(url: string): Promise<void> {
+  // Save state before loading new image
+  if (state.originalImageData) {
+    saveUndoState();
+  }
+
   // Validate URL format
   if (!isValidUrl(url)) {
     showUrlStatus('Please enter a valid URL starting with http:// or https://', 'error');
@@ -1226,6 +1542,9 @@ function exitCropMode(): void {
 async function applyCrop(): Promise<void> {
   if (!state.originalImageData || !state.cropRegion) return;
 
+  // Save state before cropping
+  saveUndoState();
+
   const { startX, startY, endX, endY } = state.cropRegion;
 
   // Normalize coordinates (in case they were drawn backwards)
@@ -1322,6 +1641,11 @@ function updateCropCursor(handle: string): void {
 // ============================================================================
 
 async function handleImageFile(file: File): Promise<void> {
+  // Save state before loading new image
+  if (state.originalImageData) {
+    saveUndoState();
+  }
+
   try {
     // Track image upload
     trackEvent('image_upload', {
@@ -1540,6 +1864,9 @@ function updateColorPalette(): void {
 function removeColorFromPalette(indexToRemove: number): void {
   if (!state.quantizedResult) return;
 
+  // Save state before removing color
+  saveUndoState();
+
   const { palette, pixels } = state.quantizedResult;
 
   // Can't remove if only one color left
@@ -1622,6 +1949,10 @@ function removeColorFromPalette(indexToRemove: number): void {
  */
 function restoreColorToPalette(): void {
   if (!state.quantizedResult) return;
+  if (state.manuallyDeletedColors.length === 0 && state.autoDeletedColors.length === 0) return;
+
+  // Save state before restoring color
+  saveUndoState();
 
   // Prioritize manually deleted colors, then auto-deleted
   let restored;
@@ -2024,6 +2355,30 @@ async function handleExport(): Promise<void> {
 // ============================================================================
 
 function setupEventListeners(): void {
+  // Keyboard shortcuts for undo/redo
+  document.addEventListener('keydown', (e) => {
+    // Check for Cmd+Z (Mac) or Ctrl+Z (Windows)
+    const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+    const modKey = isMac ? e.metaKey : e.ctrlKey;
+
+    if (modKey && e.key === 'z') {
+      e.preventDefault();
+      if (e.shiftKey) {
+        // Redo: Cmd+Shift+Z or Ctrl+Shift+Z
+        redo();
+      } else {
+        // Undo: Cmd+Z or Ctrl+Z
+        undo();
+      }
+    }
+
+    // Also support Cmd+Y / Ctrl+Y for redo
+    if (modKey && e.key === 'y') {
+      e.preventDefault();
+      redo();
+    }
+  });
+
   // Drop zone events
   elements.dropZone.addEventListener('click', () => elements.fileInput.click());
 
@@ -2055,6 +2410,11 @@ function setupEventListeners(): void {
 
   // Clear image button
   elements.clearImageBtn.addEventListener('click', () => {
+    // Save state before clearing
+    if (state.originalImageData) {
+      saveUndoState();
+    }
+
     state.originalFile = null;
     state.originalImageData = null;
     state.quantizedResult = null;
@@ -2277,6 +2637,7 @@ function setupEventListeners(): void {
   }
 
   elements.bgRemoveToggle.addEventListener('change', () => {
+    saveUndoState();
     state.bgRemoveEnabled = elements.bgRemoveToggle.checked;
     trackEvent('feature_toggle', { feature: 'background_removal', enabled: state.bgRemoveEnabled });
 
@@ -2320,6 +2681,9 @@ function setupEventListeners(): void {
   // Image click for eyedropper color picking
   elements.previewImage.addEventListener('click', (e) => {
     if (!state.eyedropperActive || !state.originalImageData) return;
+
+    // Save state before changing background color
+    saveUndoState();
 
     const img = elements.previewImage;
     const rect = img.getBoundingClientRect();
@@ -2479,6 +2843,7 @@ function setupEventListeners(): void {
 
   // Dimension input
   elements.dimensionInput.addEventListener('change', () => {
+    saveUndoState();
     state.dimensionValue = parseFloat(elements.dimensionInput.value) || 50;
     updateDimensionsDisplay();
 
@@ -2499,12 +2864,14 @@ function setupEventListeners(): void {
 
   elements.pixelHeightSlider.addEventListener('change', () => {
     if (state.quantizedResult) {
+      saveUndoState();
       generateAndDisplay3D();
     }
   });
 
   // Base toggle
   elements.baseToggle.addEventListener('change', () => {
+    saveUndoState();
     state.baseEnabled = elements.baseToggle.checked;
 
     if (state.baseEnabled) {
@@ -2536,6 +2903,7 @@ function setupEventListeners(): void {
 
   elements.baseHeightSlider.addEventListener('change', () => {
     if (state.quantizedResult) {
+      saveUndoState();
       generateAndDisplay3D();
     }
   });
@@ -2551,6 +2919,9 @@ function setupEventListeners(): void {
       if (state.previewController) {
         state.previewController.enableKeyholePlacement(
           (pos) => {
+            if (!state.keyholePosition) {
+              saveUndoState(); // Only save on first placement, not drags
+            }
             state.keyholePosition = pos;
             updateKeyholeCoords();
           },
@@ -2570,6 +2941,9 @@ function setupEventListeners(): void {
       }
     } else {
       elements.keyholeOptions.classList.remove('visible');
+      if (state.keyholePosition) {
+        saveUndoState();
+      }
       state.keyholePosition = null;
       updateKeyholeCoords();
       // Disable keyhole placement mode
@@ -2599,6 +2973,7 @@ function setupEventListeners(): void {
   elements.keyholeTypeToggle.addEventListener('change', (e) => {
     const target = e.target as HTMLInputElement;
     if (target.type === 'radio' && target.checked) {
+      saveUndoState();
       state.keyholeType = target.value as 'holepunch' | 'floating';
 
       // Toggle settings visibility
@@ -2634,6 +3009,7 @@ function setupEventListeners(): void {
 
   elements.holeDiameterSlider.addEventListener('change', () => {
     if (state.quantizedResult && state.keyholeEnabled && state.keyholePosition) {
+      saveUndoState();
       generateAndDisplay3D();
     }
   });
@@ -2654,6 +3030,7 @@ function setupEventListeners(): void {
 
   elements.innerDiameterSlider.addEventListener('change', () => {
     if (state.quantizedResult && state.keyholeEnabled && state.keyholePosition) {
+      saveUndoState();
       generateAndDisplay3D();
     }
   });
@@ -2674,6 +3051,7 @@ function setupEventListeners(): void {
 
   elements.outerDiameterSlider.addEventListener('change', () => {
     if (state.quantizedResult && state.keyholeEnabled && state.keyholePosition) {
+      saveUndoState();
       generateAndDisplay3D();
     }
   });
@@ -2698,6 +3076,7 @@ function setupEventListeners(): void {
         state.previewController.enableMagnetPlacement(
           (pos) => {
             // Add new magnet position
+            saveUndoState();
             state.magnetPositions.push(pos);
             updateMagnetCount();
 
@@ -2736,6 +3115,7 @@ function setupEventListeners(): void {
   elements.magnetPresetToggle.addEventListener('change', (e) => {
     const target = e.target as HTMLInputElement;
     if (target.type === 'radio' && target.checked) {
+      saveUndoState();
       state.magnetPreset = target.value as 'small' | 'medium' | 'large' | 'custom';
 
       // Toggle custom settings visibility
@@ -2777,6 +3157,7 @@ function setupEventListeners(): void {
 
   elements.magnetDiameterSlider.addEventListener('change', () => {
     if (state.quantizedResult && state.magnetEnabled && state.magnetPositions.length > 0) {
+      saveUndoState();
       generateAndDisplay3D();
     }
   });
@@ -2785,6 +3166,7 @@ function setupEventListeners(): void {
   elements.magnetDiameterValue.addEventListener('change', () => {
     const value = parseFloat(elements.magnetDiameterValue.value);
     if (!isNaN(value) && value >= 1 && value <= 30) {
+      saveUndoState();
       state.magnetDiameter = value;
       elements.magnetDiameterSlider.value = String(value);
       updateMagnetPreviewConfig();
@@ -2806,6 +3188,7 @@ function setupEventListeners(): void {
 
   elements.magnetHeightSlider.addEventListener('change', () => {
     if (state.quantizedResult && state.magnetEnabled && state.magnetPositions.length > 0) {
+      saveUndoState();
       generateAndDisplay3D();
     }
   });
@@ -2814,6 +3197,7 @@ function setupEventListeners(): void {
   elements.magnetHeightValue.addEventListener('change', () => {
     const value = parseFloat(elements.magnetHeightValue.value);
     if (!isNaN(value) && value >= 0.5 && value <= 20) {
+      saveUndoState();
       state.magnetHeight = value;
       elements.magnetHeightSlider.value = String(value);
       updateMagnetBufferInfo();
@@ -2828,6 +3212,7 @@ function setupEventListeners(): void {
 
   // Magnet center depth toggle
   elements.magnetCenterToggle.addEventListener('change', () => {
+    saveUndoState();
     state.magnetCenterDepth = elements.magnetCenterToggle.checked;
 
     // Toggle disabled state of depth slider
@@ -2855,6 +3240,7 @@ function setupEventListeners(): void {
 
   elements.magnetDepthSlider.addEventListener('change', () => {
     if (state.quantizedResult && state.magnetEnabled && state.magnetPositions.length > 0) {
+      saveUndoState();
       generateAndDisplay3D();
     }
   });
@@ -2863,6 +3249,7 @@ function setupEventListeners(): void {
   elements.magnetDepthValue.addEventListener('change', () => {
     const value = parseFloat(elements.magnetDepthValue.value);
     if (!isNaN(value) && value >= 0 && value <= 10) {
+      saveUndoState();
       state.magnetDepth = value;
       elements.magnetDepthSlider.value = String(value);
       updateMagnetBufferInfo();
@@ -2877,6 +3264,9 @@ function setupEventListeners(): void {
 
   // Clear all magnets button
   elements.clearMagnetsBtn.addEventListener('click', () => {
+    if (state.magnetPositions.length > 0) {
+      saveUndoState();
+    }
     state.magnetPositions = [];
     updateMagnetCount();
 
@@ -2890,7 +3280,13 @@ function setupEventListeners(): void {
   });
 
   // Base color picker
+  let baseColorUndoSaved = false;
   elements.baseColorInput.addEventListener('input', () => {
+    // Save undo state on first input (start of color picking)
+    if (!baseColorUndoSaved) {
+      saveUndoState();
+      baseColorUndoSaved = true;
+    }
     state.baseColor = elements.baseColorInput.value;
     elements.baseColorValue.textContent = state.baseColor;
 
@@ -2898,6 +3294,11 @@ function setupEventListeners(): void {
       updateColorPalette();
       generateAndDisplay3D();
     }
+  });
+
+  elements.baseColorInput.addEventListener('change', () => {
+    // Reset flag when color picking is done
+    baseColorUndoSaved = false;
   });
 
   // Color reduce toggle
@@ -2912,6 +3313,7 @@ function setupEventListeners(): void {
     }
 
     if (state.originalImageData) {
+      saveUndoState();
       processImage();
     }
   });
@@ -2925,6 +3327,7 @@ function setupEventListeners(): void {
 
   elements.colorReduceSlider.addEventListener('change', () => {
     if (state.originalImageData && state.colorReduceEnabled) {
+      saveUndoState();
       processImage();
     }
   });
@@ -2949,6 +3352,7 @@ function setupEventListeners(): void {
     elements.colorReduceSlider.value = String(value);
 
     if (state.originalImageData && state.colorReduceEnabled) {
+      saveUndoState();
       processImage();
     }
   });
