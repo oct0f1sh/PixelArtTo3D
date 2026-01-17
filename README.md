@@ -9,12 +9,16 @@ Convert pixel art images into 3D printable models (STL/3MF). Perfect for creatin
 - **100% In-Browser** — Your images never leave your device. No uploads, no server processing.
 - **STL Export** — Single mesh, binary format for universal slicer compatibility
 - **3MF Export** — Multi-color support with separate objects per color
+- **URL Import** — Load images directly from URLs (with CORS support)
+- **Image Cropping** — Select and crop regions of your image before processing
 - **Background Removal** — Auto-detect or manually pick background color with eyedropper
 - **Color Reduction** — Reduce palette to target color count for cleaner prints
-- **Keyhole Option** — Add a hanging hole for keychains (top-left, center, or right)
+- **Keyhole Option** — Add a hanging hole for keychains (holepunch or floating ring style)
+- **Magnet Compartments** — Add cylindrical cavities for embedding magnets
 - **Auto Scale Detection** — Automatically detects upscaled pixel art and downsamples to native resolution
-- **Real-time 3D Preview** — Orbit, zoom, and pan to inspect your model before export
+- **Real-time 3D Preview** — Orbit, zoom (up to 50x), and pan to inspect your model before export
 - **Customizable Dimensions** — Set physical size in mm or inches
+- **Undo/Redo** — Full history support (Cmd+Z / Ctrl+Z to undo, Shift+Cmd+Z / Ctrl+Y to redo)
 
 ## How It Works
 
@@ -68,7 +72,9 @@ Live at: `https://<username>.github.io/PixelArtTo3D/`
 │   ├── meshGenerator.ts    # Pixel-to-3D conversion, greedy meshing
 │   ├── exporter.ts     # STL and 3MF export
 │   ├── preview.ts      # Three.js scene and controls
-│   └── types.ts        # TypeScript interfaces
+│   ├── types.ts        # TypeScript interfaces
+│   └── *.test.ts       # Unit tests (Vitest)
+├── test-resources/     # Test images (queen.png, ral.png, ral2.jpg)
 ├── public/
 │   ├── robots.txt      # Search engine crawler rules
 │   ├── sitemap.xml     # Sitemap for SEO

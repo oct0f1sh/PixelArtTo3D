@@ -61,7 +61,7 @@ function expectManifold(geometry: THREE.BufferGeometry | null, name: string) {
   expect(boundaryEdges, `${name} has boundary edges`).toBe(0);
 }
 
-const TEST_IMAGES = ['queen.png', 'ral.png'];
+const TEST_IMAGES = ['test-resources/queen.png', 'test-resources/ral.png'];
 const DEFAULT_PARAMS = { pixelSize: 1, pixelHeight: 2, baseHeight: 1 };
 
 describe('Manifold Geometry Tests', () => {

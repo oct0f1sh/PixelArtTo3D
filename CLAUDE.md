@@ -53,14 +53,28 @@ Meshes must be watertight (zero boundary edges) and manifold (each edge shared b
 
 The UI uses collapsible panels with localStorage persistence for panel states:
 
-- **Image Input Panel**: Drag & drop or file selector, input/output preview with zoom/pan
+- **Image Input Panel**: Drag & drop, file selector, or URL import; input/output preview with zoom/pan and crop tool
 - **Background Removal Panel**: Toggle, color picker with eyedropper, tolerance slider, auto-detection on load
 - **Physical Dimensions Panel**: Width/height inputs, unit toggle (mm/inches)
 - **3D Height Settings Panel**: Pixel height slider, base toggle and height slider, base color picker
-- **Keyhole Options Panel**: Enable toggle, position selector
+- **Keyhole Options Panel**: Enable toggle, type selector (holepunch/floating), diameter controls
+- **Magnet Compartment Panel**: Enable toggle, size presets (small/medium/large/custom), diameter/height/depth controls, center depth toggle
 - **Color Palette Panel**: Color count display, reduce toggle with slider/+/- buttons, individual color swatches with X delete buttons
-- **3D Preview Panel**: Three.js canvas with orbit controls, reset view button
+- **3D Preview Panel**: Three.js canvas with orbit controls, reset view button, magnet wireframe indicators
 - **Export Panel**: Format toggle (STL/3MF), filename input, download button
+
+### Image Input Features
+
+- **URL Import**: Load images directly from URLs (with CORS support)
+- **Image Cropping**: Click "Crop" button to enter crop mode, drag to select region, resize with handles, Apply/Cancel
+- **Zoom/Pan**: Mouse wheel to zoom (up to 50x), click and drag to pan
+
+### Undo/Redo
+
+Full undo/redo support for most actions:
+- `Cmd+Z` (Mac) / `Ctrl+Z` (Windows): Undo
+- `Shift+Cmd+Z` (Mac) / `Ctrl+Y` (Windows): Redo
+- Supports up to 50 history states
 
 ### Color Management
 
@@ -81,7 +95,7 @@ Tests in `src/imageProcessing.test.ts` verify:
 - Color accuracy after downscaling
 - Non-uniform scale detection
 
-Test images should be placed in the project root (e.g., `queen.png`, `ral.png`, `ral2.jpg`).
+Test images are located in `test-resources/` directory (e.g., `test-resources/queen.png`, `test-resources/ral.png`, `test-resources/ral2.jpg`).
 
 ## Default Values
 

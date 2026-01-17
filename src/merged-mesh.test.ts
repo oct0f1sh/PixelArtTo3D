@@ -181,7 +181,7 @@ describe('Mesh Manifold Tests', () => {
     });
 
     it('queen.png without holepunch', async () => {
-      const imagePath = path.resolve(process.cwd(), 'queen.png');
+      const imagePath = path.resolve(process.cwd(), 'test-resources/queen.png');
       if (!fs.existsSync(imagePath)) return;
 
       const imageData = await loadImageData(imagePath);
@@ -196,7 +196,7 @@ describe('Mesh Manifold Tests', () => {
     });
 
     it('ral2.jpg with holepunch (downsampled)', async () => {
-      const imagePath = path.resolve(process.cwd(), 'ral2.jpg');
+      const imagePath = path.resolve(process.cwd(), 'test-resources/ral2.jpg');
       if (!fs.existsSync(imagePath)) return;
 
       // Downsample to 75x100 for faster testing (10% of original)
@@ -221,7 +221,7 @@ describe('Mesh Manifold Tests', () => {
 
     // Full resolution test - only run when debugging specific issues
     it.skip('ral2.jpg with holepunch (FULL RESOLUTION)', async () => {
-      const imagePath = path.resolve(process.cwd(), 'ral2.jpg');
+      const imagePath = path.resolve(process.cwd(), 'test-resources/ral2.jpg');
       if (!fs.existsSync(imagePath)) return;
 
       const imageData = await loadImageData(imagePath);

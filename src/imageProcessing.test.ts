@@ -220,7 +220,7 @@ function countPixelsOfColor(
 }
 
 describe('Background Removal Tests', () => {
-  const TEST_IMAGE = 'ral2.jpg';
+  const TEST_IMAGE = 'test-resources/ral2.jpg';
 
   it('should load the test image', async () => {
     const imagePath = path.resolve(process.cwd(), TEST_IMAGE);
@@ -347,7 +347,7 @@ describe('Background Removal Tests', () => {
 });
 
 describe('Pixel Scale Detection Tests', () => {
-  const TEST_IMAGE = 'ral2.jpg';
+  const TEST_IMAGE = 'test-resources/ral2.jpg';
 
   it('should detect pixel scale for upscaled pixel art', async () => {
     const imagePath = path.resolve(process.cwd(), TEST_IMAGE);
@@ -447,7 +447,7 @@ describe('Pixel Scale Detection Tests', () => {
 });
 
 describe('Combined Background Removal and Downscaling', () => {
-  const TEST_IMAGE = 'ral2.jpg';
+  const TEST_IMAGE = 'test-resources/ral2.jpg';
 
   it('should process large image with background removal efficiently', async () => {
     const imagePath = path.resolve(process.cwd(), TEST_IMAGE);
@@ -508,7 +508,7 @@ describe('Combined Background Removal and Downscaling', () => {
 });
 
 describe('Queen.png Processing Tests', () => {
-  const TEST_IMAGE = 'queen.png';
+  const TEST_IMAGE = 'test-resources/queen.png';
 
   it('should load queen.png and detect it as native resolution', async () => {
     const imagePath = path.resolve(process.cwd(), TEST_IMAGE);
@@ -585,7 +585,7 @@ describe('Queen.png Processing Tests', () => {
 });
 
 describe('Pixel Art Scale and Color Accuracy Tests', () => {
-  const TEST_IMAGE = 'ral2.jpg';
+  const TEST_IMAGE = 'test-resources/ral2.jpg';
 
   /**
    * Node.js compatible version of resizePixelArt using center pixel extraction

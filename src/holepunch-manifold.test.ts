@@ -125,9 +125,9 @@ function analyzeAllMeshes(baseMesh: THREE.BufferGeometry | null, colorMeshes: Ma
 
 describe('Holepunch Manifold Test', () => {
   it('ral2.jpg WITHOUT holepunch - each mesh should be individually manifold', async () => {
-    const imagePath = path.resolve(process.cwd(), 'ral2.jpg');
+    const imagePath = path.resolve(process.cwd(), 'test-resources/ral2.jpg');
     if (!fs.existsSync(imagePath)) {
-      console.log('Skipping test - ral2.jpg not found');
+      console.log('Skipping test - test-resources/ral2.jpg not found');
       return;
     }
 
@@ -172,9 +172,9 @@ describe('Holepunch Manifold Test', () => {
   });
 
   it('ral2.jpg with holepunch at center - each mesh should be individually manifold', async () => {
-    const imagePath = path.resolve(process.cwd(), 'ral2.jpg');
+    const imagePath = path.resolve(process.cwd(), 'test-resources/ral2.jpg');
     if (!fs.existsSync(imagePath)) {
-      console.log('Skipping test - ral2.jpg not found');
+      console.log('Skipping test - test-resources/ral2.jpg not found');
       return;
     }
 
