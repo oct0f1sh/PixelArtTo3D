@@ -5,7 +5,7 @@
 
 import './style.css';
 import * as THREE from 'three';
-import { loadImage, quantizeColors, removeBackground, resizeImage, getOptimalDimensions, resizePixelArt } from './imageProcessor';
+import { loadImage, loadImageFromUrl, quantizeColors, removeBackground, resizeImage, getOptimalDimensions, resizePixelArt } from './imageProcessor';
 import { initPreview, type PreviewController } from './preview';
 import { generateMeshesAsync, rotateForPrinting, type MeshResult } from './meshGenerator';
 import { exportSTL, export3MF } from './exporter';
@@ -128,6 +128,17 @@ interface AppState {
   outputZoom: number;
   inputPan: { x: number; y: number };
   outputPan: { x: number; y: number };
+
+  // URL input
+  urlInputValue: string;
+  isLoadingUrl: boolean;
+
+  // Crop mode
+  cropMode: boolean;
+  cropRegion: { startX: number; startY: number; endX: number; endY: number } | null;
+  cropDragging: boolean;
+  cropDragHandle: 'none' | 'move' | 'nw' | 'ne' | 'sw' | 'se' | 'n' | 's' | 'e' | 'w';
+  cropDragStart: { x: number; y: number; region: { startX: number; startY: number; endX: number; endY: number } | null };
 }
 
 const state: AppState = {
@@ -187,6 +198,17 @@ const state: AppState = {
   outputZoom: 1,
   inputPan: { x: 0, y: 0 },
   outputPan: { x: 0, y: 0 },
+
+  // URL input
+  urlInputValue: '',
+  isLoadingUrl: false,
+
+  // Crop mode
+  cropMode: false,
+  cropRegion: null,
+  cropDragging: false,
+  cropDragHandle: 'none',
+  cropDragStart: { x: 0, y: 0, region: null },
 };
 
 // Conversion factor: 1 inch = 25.4mm
@@ -295,6 +317,19 @@ const elements = {
   fileExtension: document.getElementById('file-extension') as HTMLSpanElement,
   exportStatus: document.getElementById('export-status') as HTMLDivElement,
   downloadBtn: document.getElementById('download-btn') as HTMLButtonElement,
+
+  // URL input
+  urlInput: document.getElementById('url-input') as HTMLInputElement,
+  urlLoadBtn: document.getElementById('url-load-btn') as HTMLButtonElement,
+  urlStatus: document.getElementById('url-status') as HTMLDivElement,
+
+  // Crop
+  inputPreviewContainer: document.getElementById('input-preview-container') as HTMLDivElement,
+  cropOverlay: document.getElementById('crop-overlay') as HTMLCanvasElement,
+  cropToggleBtn: document.getElementById('crop-toggle-btn') as HTMLButtonElement,
+  cropControls: document.getElementById('crop-controls') as HTMLDivElement,
+  cropCancelBtn: document.getElementById('crop-cancel-btn') as HTMLButtonElement,
+  cropApplyBtn: document.getElementById('crop-apply-btn') as HTMLButtonElement,
 };
 
 // ============================================================================
@@ -808,6 +843,436 @@ function updateBgColorPreview(color: { r: number; g: number; b: number } | null)
   } else {
     elements.bgColorPreview.style.backgroundColor = '';
     elements.bgColorPreview.classList.remove('has-color');
+  }
+}
+
+// ============================================================================
+// URL Image Loading
+// ============================================================================
+
+/**
+ * Validates a URL string
+ */
+function isValidUrl(urlString: string): boolean {
+  try {
+    const url = new URL(urlString);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Shows URL status message
+ */
+function showUrlStatus(message: string, type: 'error' | 'success' | ''): void {
+  elements.urlStatus.textContent = message;
+  elements.urlStatus.className = `url-status ${type}`;
+}
+
+/**
+ * Handles loading an image from a URL
+ */
+async function handleImageUrl(url: string): Promise<void> {
+  // Validate URL format
+  if (!isValidUrl(url)) {
+    showUrlStatus('Please enter a valid URL starting with http:// or https://', 'error');
+    return;
+  }
+
+  // Set loading state
+  state.isLoadingUrl = true;
+  elements.urlLoadBtn.classList.add('loading');
+  elements.urlLoadBtn.textContent = '';
+  elements.urlLoadBtn.disabled = true;
+  showUrlStatus('', '');
+
+  try {
+    // Load image from URL
+    const imageData = await loadImageFromUrl(url);
+
+    // Store image data
+    state.originalFile = null; // No file when loading from URL
+    state.originalImageData = imageData;
+
+    // Create a data URL for preview
+    const canvas = document.createElement('canvas');
+    canvas.width = imageData.width;
+    canvas.height = imageData.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Failed to get canvas context');
+    ctx.putImageData(imageData, 0, 0);
+    elements.previewImage.src = canvas.toDataURL('image/png');
+
+    elements.imageDimensions.textContent = `${imageData.width} x ${imageData.height} px`;
+
+    // Extract filename from URL or use default
+    const urlObj = new URL(url);
+    const pathParts = urlObj.pathname.split('/');
+    const lastPart = pathParts[pathParts.length - 1] || 'url_image';
+    const baseName = lastPart.replace(/\.[^/.]+$/, '') || 'url_image';
+    elements.imageFilename.textContent = baseName;
+
+    // Update default filename
+    state.filename = `${baseName}_keychain`;
+    elements.filenameInput.value = state.filename;
+
+    // Guess background color from edge pixels
+    const guessedBgColor = guessBackgroundColor(imageData);
+    if (guessedBgColor) {
+      state.bgColor = guessedBgColor;
+      updateBgColorPreview(guessedBgColor);
+    }
+
+    // Show preview, hide drop zone
+    elements.dropZone.style.display = 'none';
+    elements.imagePreview.classList.add('visible');
+
+    // Process the image
+    await processImage();
+
+    showUrlStatus('Image loaded successfully!', 'success');
+
+    // Track URL load
+    trackEvent('image_url_load', { success: true });
+
+    // Clear success message after a delay
+    setTimeout(() => showUrlStatus('', ''), 3000);
+
+  } catch (error) {
+    console.error('Failed to load image from URL:', error);
+    const message = error instanceof Error ? error.message : 'Failed to load image from URL';
+    showUrlStatus(message, 'error');
+    trackEvent('image_url_load', { success: false, error: message });
+  } finally {
+    // Reset loading state
+    state.isLoadingUrl = false;
+    elements.urlLoadBtn.classList.remove('loading');
+    elements.urlLoadBtn.textContent = 'Load';
+    elements.urlLoadBtn.disabled = false;
+  }
+}
+
+// ============================================================================
+// Image Cropping
+// ============================================================================
+
+/**
+ * Converts screen coordinates to image pixel coordinates.
+ * Accounts for zoom, pan, and object-fit: contain.
+ */
+function screenToImageCoords(screenX: number, screenY: number): { x: number; y: number } {
+  const img = elements.previewImage;
+  const container = elements.inputPreviewContainer;
+  const containerRect = container.getBoundingClientRect();
+
+  // Get the contained image size
+  const containedSize = getContainedImageSize(img, container);
+  const displayWidth = containedSize.width * state.inputZoom;
+  const displayHeight = containedSize.height * state.inputZoom;
+
+  // Calculate center position with pan offset
+  const centerX = containerRect.width / 2 + state.inputPan.x;
+  const centerY = containerRect.height / 2 + state.inputPan.y;
+
+  // Image top-left corner in screen coordinates
+  const imgLeft = centerX - displayWidth / 2;
+  const imgTop = centerY - displayHeight / 2;
+
+  // Convert screen position to position within displayed image
+  const relativeX = screenX - containerRect.left - imgLeft;
+  const relativeY = screenY - containerRect.top - imgTop;
+
+  // Scale to image pixel coordinates
+  const imgNaturalWidth = img.naturalWidth || 1;
+  const imgNaturalHeight = img.naturalHeight || 1;
+
+  const imageX = (relativeX / displayWidth) * imgNaturalWidth;
+  const imageY = (relativeY / displayHeight) * imgNaturalHeight;
+
+  return { x: imageX, y: imageY };
+}
+
+/**
+ * Converts image pixel coordinates to screen coordinates.
+ */
+function imageToScreenCoords(imageX: number, imageY: number): { x: number; y: number } {
+  const img = elements.previewImage;
+  const container = elements.inputPreviewContainer;
+  const containerRect = container.getBoundingClientRect();
+
+  // Get the contained image size
+  const containedSize = getContainedImageSize(img, container);
+  const displayWidth = containedSize.width * state.inputZoom;
+  const displayHeight = containedSize.height * state.inputZoom;
+
+  // Calculate center position with pan offset
+  const centerX = containerRect.width / 2 + state.inputPan.x;
+  const centerY = containerRect.height / 2 + state.inputPan.y;
+
+  // Image top-left corner in screen coordinates
+  const imgLeft = centerX - displayWidth / 2;
+  const imgTop = centerY - displayHeight / 2;
+
+  // Convert image coordinates to screen coordinates
+  const imgNaturalWidth = img.naturalWidth || 1;
+  const imgNaturalHeight = img.naturalHeight || 1;
+
+  const screenX = imgLeft + (imageX / imgNaturalWidth) * displayWidth;
+  const screenY = imgTop + (imageY / imgNaturalHeight) * displayHeight;
+
+  return { x: screenX, y: screenY };
+}
+
+/**
+ * Draws the crop overlay showing the selected region.
+ */
+function drawCropOverlay(): void {
+  const canvas = elements.cropOverlay;
+  const ctx = canvas.getContext('2d');
+  if (!ctx || !state.cropMode) return;
+
+  const container = elements.inputPreviewContainer;
+  const containerRect = container.getBoundingClientRect();
+
+  // Set canvas size to match container
+  canvas.width = containerRect.width;
+  canvas.height = containerRect.height;
+
+  // Clear canvas
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Draw semi-transparent overlay over entire area
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  if (state.cropRegion) {
+    // Convert crop region to screen coordinates
+    const topLeft = imageToScreenCoords(state.cropRegion.startX, state.cropRegion.startY);
+    const bottomRight = imageToScreenCoords(state.cropRegion.endX, state.cropRegion.endY);
+
+    // Adjust for container position
+    const left = topLeft.x - containerRect.left;
+    const top = topLeft.y - containerRect.top;
+    const right = bottomRight.x - containerRect.left;
+    const bottom = bottomRight.y - containerRect.top;
+    const width = right - left;
+    const height = bottom - top;
+
+    // Clear the crop region (make it transparent)
+    ctx.clearRect(left, top, width, height);
+
+    // Draw selection border
+    ctx.strokeStyle = '#4a9eff';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(left, top, width, height);
+
+    // Draw resize handles
+    const handleSize = 8;
+    ctx.fillStyle = '#4a9eff';
+
+    // Corner handles
+    const handles = [
+      { x: left, y: top }, // nw
+      { x: right, y: top }, // ne
+      { x: left, y: bottom }, // sw
+      { x: right, y: bottom }, // se
+      { x: left + width / 2, y: top }, // n
+      { x: left + width / 2, y: bottom }, // s
+      { x: left, y: top + height / 2 }, // w
+      { x: right, y: top + height / 2 }, // e
+    ];
+
+    for (const handle of handles) {
+      ctx.fillRect(
+        handle.x - handleSize / 2,
+        handle.y - handleSize / 2,
+        handleSize,
+        handleSize
+      );
+    }
+  }
+}
+
+/**
+ * Gets the crop handle at a given screen position.
+ */
+function getCropHandleAtPosition(screenX: number, screenY: number): 'none' | 'move' | 'nw' | 'ne' | 'sw' | 'se' | 'n' | 's' | 'e' | 'w' {
+  if (!state.cropRegion) return 'none';
+
+  const topLeft = imageToScreenCoords(state.cropRegion.startX, state.cropRegion.startY);
+  const bottomRight = imageToScreenCoords(state.cropRegion.endX, state.cropRegion.endY);
+
+  const left = topLeft.x;
+  const top = topLeft.y;
+  const right = bottomRight.x;
+  const bottom = bottomRight.y;
+  const width = right - left;
+  const height = bottom - top;
+
+  const handleSize = 16; // Hit area for handles
+
+  // Check corner handles first
+  if (Math.abs(screenX - left) < handleSize && Math.abs(screenY - top) < handleSize) return 'nw';
+  if (Math.abs(screenX - right) < handleSize && Math.abs(screenY - top) < handleSize) return 'ne';
+  if (Math.abs(screenX - left) < handleSize && Math.abs(screenY - bottom) < handleSize) return 'sw';
+  if (Math.abs(screenX - right) < handleSize && Math.abs(screenY - bottom) < handleSize) return 'se';
+
+  // Check edge handles
+  if (Math.abs(screenX - (left + width / 2)) < handleSize && Math.abs(screenY - top) < handleSize) return 'n';
+  if (Math.abs(screenX - (left + width / 2)) < handleSize && Math.abs(screenY - bottom) < handleSize) return 's';
+  if (Math.abs(screenX - left) < handleSize && Math.abs(screenY - (top + height / 2)) < handleSize) return 'w';
+  if (Math.abs(screenX - right) < handleSize && Math.abs(screenY - (top + height / 2)) < handleSize) return 'e';
+
+  // Check if inside selection (for move)
+  if (screenX > left && screenX < right && screenY > top && screenY < bottom) return 'move';
+
+  return 'none';
+}
+
+/**
+ * Enters crop mode.
+ */
+function enterCropMode(): void {
+  if (!state.originalImageData) return;
+
+  state.cropMode = true;
+  state.cropRegion = null;
+  state.cropDragging = false;
+  state.cropDragHandle = 'none';
+
+  elements.cropToggleBtn.classList.add('active');
+  elements.cropControls.classList.add('visible');
+  elements.cropOverlay.classList.add('active');
+  elements.cropApplyBtn.disabled = true;
+
+  // Disable panning while in crop mode
+  elements.inputPreviewContainer.style.cursor = 'crosshair';
+
+  drawCropOverlay();
+}
+
+/**
+ * Exits crop mode without applying changes.
+ */
+function exitCropMode(): void {
+  state.cropMode = false;
+  state.cropRegion = null;
+  state.cropDragging = false;
+  state.cropDragHandle = 'none';
+
+  elements.cropToggleBtn.classList.remove('active');
+  elements.cropControls.classList.remove('visible');
+  elements.cropOverlay.classList.remove('active');
+
+  // Remove all cursor classes
+  const cursorClasses = ['cursor-move', 'cursor-nw-resize', 'cursor-ne-resize', 'cursor-sw-resize', 'cursor-se-resize', 'cursor-n-resize', 'cursor-s-resize', 'cursor-e-resize', 'cursor-w-resize'];
+  cursorClasses.forEach(cls => elements.cropOverlay.classList.remove(cls));
+
+  // Restore panning cursor
+  elements.inputPreviewContainer.style.cursor = 'grab';
+
+  // Clear overlay
+  const ctx = elements.cropOverlay.getContext('2d');
+  if (ctx) {
+    ctx.clearRect(0, 0, elements.cropOverlay.width, elements.cropOverlay.height);
+  }
+}
+
+/**
+ * Applies the crop and updates the image.
+ */
+async function applyCrop(): Promise<void> {
+  if (!state.originalImageData || !state.cropRegion) return;
+
+  const { startX, startY, endX, endY } = state.cropRegion;
+
+  // Normalize coordinates (in case they were drawn backwards)
+  const minX = Math.max(0, Math.floor(Math.min(startX, endX)));
+  const maxX = Math.min(state.originalImageData.width, Math.ceil(Math.max(startX, endX)));
+  const minY = Math.max(0, Math.floor(Math.min(startY, endY)));
+  const maxY = Math.min(state.originalImageData.height, Math.ceil(Math.max(startY, endY)));
+
+  const cropWidth = maxX - minX;
+  const cropHeight = maxY - minY;
+
+  if (cropWidth < 1 || cropHeight < 1) {
+    exitCropMode();
+    return;
+  }
+
+  // Create new ImageData for cropped region
+  const canvas = document.createElement('canvas');
+  canvas.width = cropWidth;
+  canvas.height = cropHeight;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    exitCropMode();
+    return;
+  }
+
+  // Copy pixels from original to cropped
+  const newImageData = ctx.createImageData(cropWidth, cropHeight);
+  const srcData = state.originalImageData.data;
+  const dstData = newImageData.data;
+  const srcWidth = state.originalImageData.width;
+
+  for (let y = 0; y < cropHeight; y++) {
+    for (let x = 0; x < cropWidth; x++) {
+      const srcIdx = ((minY + y) * srcWidth + (minX + x)) * 4;
+      const dstIdx = (y * cropWidth + x) * 4;
+      dstData[dstIdx] = srcData[srcIdx];
+      dstData[dstIdx + 1] = srcData[srcIdx + 1];
+      dstData[dstIdx + 2] = srcData[srcIdx + 2];
+      dstData[dstIdx + 3] = srcData[srcIdx + 3];
+    }
+  }
+
+  // Update original image data
+  state.originalImageData = newImageData;
+
+  // Update preview image
+  ctx.putImageData(newImageData, 0, 0);
+  elements.previewImage.src = canvas.toDataURL('image/png');
+  elements.imageDimensions.textContent = `${cropWidth} x ${cropHeight} px`;
+
+  // Reset zoom and pan
+  state.inputZoom = 1;
+  state.inputPan = { x: 0, y: 0 };
+  elements.previewImage.style.transform = 'translate(0px, 0px) scale(1)';
+
+  // Exit crop mode
+  exitCropMode();
+
+  // Re-guess background color for cropped image
+  const guessedBgColor = guessBackgroundColor(newImageData);
+  if (guessedBgColor) {
+    state.bgColor = guessedBgColor;
+    updateBgColorPreview(guessedBgColor);
+  }
+
+  // Reprocess the image
+  await processImage();
+
+  trackEvent('image_crop', {
+    original_width: state.originalImageData?.width || 0,
+    original_height: state.originalImageData?.height || 0,
+  });
+}
+
+/**
+ * Updates the crop overlay cursor based on handle position.
+ */
+function updateCropCursor(handle: string): void {
+  const cursorClasses = ['cursor-move', 'cursor-nw-resize', 'cursor-ne-resize', 'cursor-sw-resize', 'cursor-se-resize', 'cursor-n-resize', 'cursor-s-resize', 'cursor-e-resize', 'cursor-w-resize'];
+  cursorClasses.forEach(cls => elements.cropOverlay.classList.remove(cls));
+
+  if (handle !== 'none') {
+    elements.cropOverlay.classList.add(`cursor-${handle}-resize`);
+  }
+  if (handle === 'move') {
+    elements.cropOverlay.classList.remove('cursor-move-resize');
+    elements.cropOverlay.classList.add('cursor-move');
   }
 }
 
@@ -1607,6 +2072,15 @@ function setupEventListeners(): void {
     state.outputPan = { x: 0, y: 0 };
     elements.previewImage.style.transform = 'translate(0px, 0px) scale(1)';
     elements.outputPreviewImage.style.transform = 'translate(0px, 0px) scale(1)';
+
+    // Reset crop mode
+    if (state.cropMode) {
+      exitCropMode();
+    }
+
+    // Reset URL input
+    elements.urlInput.value = '';
+    showUrlStatus('', '');
   });
 
   // Pixel grid toggle
@@ -1668,8 +2142,8 @@ function setupEventListeners(): void {
   const inputContainer = elements.previewImage.parentElement;
   if (inputContainer) {
     inputContainer.addEventListener('mousedown', (e) => {
-      // Don't start drag if eyedropper is active
-      if (state.eyedropperActive) return;
+      // Don't start drag if eyedropper is active or in crop mode
+      if (state.eyedropperActive || state.cropMode) return;
       e.preventDefault(); // Prevent text selection and image drag
       inputDragging = true;
       inputDragStart = { x: e.clientX - state.inputPan.x, y: e.clientY - state.inputPan.y };
@@ -2431,6 +2905,207 @@ function setupEventListeners(): void {
 
   // Download button
   elements.downloadBtn.addEventListener('click', handleExport);
+
+  // ============================================================
+  // URL Input Event Listeners
+  // ============================================================
+
+  // URL load button click
+  elements.urlLoadBtn.addEventListener('click', () => {
+    const url = elements.urlInput.value.trim();
+    if (url) {
+      handleImageUrl(url);
+    }
+  });
+
+  // URL input Enter key
+  elements.urlInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+      const url = elements.urlInput.value.trim();
+      if (url) {
+        handleImageUrl(url);
+      }
+    }
+  });
+
+  // Prevent URL input from triggering drop zone click
+  elements.urlInput.addEventListener('click', (e) => {
+    e.stopPropagation();
+  });
+
+  elements.urlLoadBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+  });
+
+  // ============================================================
+  // Crop Event Listeners
+  // ============================================================
+
+  // Crop toggle button
+  elements.cropToggleBtn.addEventListener('click', () => {
+    if (!state.originalImageData) return;
+
+    if (state.cropMode) {
+      exitCropMode();
+    } else {
+      enterCropMode();
+    }
+  });
+
+  // Crop cancel button
+  elements.cropCancelBtn.addEventListener('click', () => {
+    exitCropMode();
+  });
+
+  // Crop apply button
+  elements.cropApplyBtn.addEventListener('click', () => {
+    applyCrop();
+  });
+
+  // Crop overlay mouse events
+  elements.cropOverlay.addEventListener('mousedown', (e) => {
+    if (!state.cropMode) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const handle = getCropHandleAtPosition(e.clientX, e.clientY);
+
+    if (handle !== 'none' && state.cropRegion) {
+      // Start dragging existing region
+      state.cropDragging = true;
+      state.cropDragHandle = handle;
+      state.cropDragStart = {
+        x: e.clientX,
+        y: e.clientY,
+        region: { ...state.cropRegion }
+      };
+    } else {
+      // Start new selection
+      const imageCoords = screenToImageCoords(e.clientX, e.clientY);
+      state.cropDragging = true;
+      state.cropDragHandle = 'se'; // New selections drag the SE corner
+      state.cropRegion = {
+        startX: imageCoords.x,
+        startY: imageCoords.y,
+        endX: imageCoords.x,
+        endY: imageCoords.y
+      };
+      state.cropDragStart = {
+        x: e.clientX,
+        y: e.clientY,
+        region: { ...state.cropRegion }
+      };
+    }
+  });
+
+  elements.cropOverlay.addEventListener('mousemove', (e) => {
+    if (!state.cropMode) return;
+
+    if (state.cropDragging && state.cropDragStart.region) {
+      const img = elements.previewImage;
+      const imgWidth = img.naturalWidth || 1;
+      const imgHeight = img.naturalHeight || 1;
+
+      if (state.cropDragHandle === 'move') {
+        // Move the entire region
+        const imageCoords = screenToImageCoords(e.clientX, e.clientY);
+        const startImageCoords = screenToImageCoords(state.cropDragStart.x, state.cropDragStart.y);
+        const dx = imageCoords.x - startImageCoords.x;
+        const dy = imageCoords.y - startImageCoords.y;
+
+        const origRegion = state.cropDragStart.region;
+        const width = origRegion.endX - origRegion.startX;
+        const height = origRegion.endY - origRegion.startY;
+
+        let newStartX = origRegion.startX + dx;
+        let newStartY = origRegion.startY + dy;
+
+        // Clamp to image bounds
+        newStartX = Math.max(0, Math.min(imgWidth - width, newStartX));
+        newStartY = Math.max(0, Math.min(imgHeight - height, newStartY));
+
+        state.cropRegion = {
+          startX: newStartX,
+          startY: newStartY,
+          endX: newStartX + width,
+          endY: newStartY + height
+        };
+      } else {
+        // Resize the region
+        const imageCoords = screenToImageCoords(e.clientX, e.clientY);
+        const clampedX = Math.max(0, Math.min(imgWidth, imageCoords.x));
+        const clampedY = Math.max(0, Math.min(imgHeight, imageCoords.y));
+        const origRegion = state.cropDragStart.region;
+
+        state.cropRegion = { ...origRegion };
+
+        switch (state.cropDragHandle) {
+          case 'nw':
+            state.cropRegion.startX = clampedX;
+            state.cropRegion.startY = clampedY;
+            break;
+          case 'ne':
+            state.cropRegion.endX = clampedX;
+            state.cropRegion.startY = clampedY;
+            break;
+          case 'sw':
+            state.cropRegion.startX = clampedX;
+            state.cropRegion.endY = clampedY;
+            break;
+          case 'se':
+            state.cropRegion.endX = clampedX;
+            state.cropRegion.endY = clampedY;
+            break;
+          case 'n':
+            state.cropRegion.startY = clampedY;
+            break;
+          case 's':
+            state.cropRegion.endY = clampedY;
+            break;
+          case 'w':
+            state.cropRegion.startX = clampedX;
+            break;
+          case 'e':
+            state.cropRegion.endX = clampedX;
+            break;
+        }
+      }
+
+      drawCropOverlay();
+    } else {
+      // Update cursor based on handle position
+      const handle = getCropHandleAtPosition(e.clientX, e.clientY);
+      updateCropCursor(handle);
+    }
+  });
+
+  elements.cropOverlay.addEventListener('mouseup', () => {
+    if (state.cropDragging) {
+      state.cropDragging = false;
+      state.cropDragHandle = 'none';
+
+      // Enable apply button if we have a valid crop region
+      if (state.cropRegion) {
+        const width = Math.abs(state.cropRegion.endX - state.cropRegion.startX);
+        const height = Math.abs(state.cropRegion.endY - state.cropRegion.startY);
+        elements.cropApplyBtn.disabled = width < 10 || height < 10;
+      }
+    }
+  });
+
+  elements.cropOverlay.addEventListener('mouseleave', () => {
+    if (state.cropDragging) {
+      state.cropDragging = false;
+      state.cropDragHandle = 'none';
+    }
+  });
+
+  // Update crop overlay when zoom/pan changes
+  elements.previewImage.parentElement?.addEventListener('wheel', () => {
+    if (state.cropMode) {
+      requestAnimationFrame(() => drawCropOverlay());
+    }
+  }, { passive: true });
 }
 
 // ============================================================================

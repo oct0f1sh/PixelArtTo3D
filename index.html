@@ -108,6 +108,16 @@
                   class="drop-zone-input"
                   accept="image/png,image/jpeg,image/webp"
                 />
+                <div class="url-input-section">
+                  <div class="url-input-divider">
+                    <span>or paste URL</span>
+                  </div>
+                  <div class="url-input-row">
+                    <input type="text" id="url-input" placeholder="https://example.com/image.png" />
+                    <button type="button" id="url-load-btn">Load</button>
+                  </div>
+                  <div id="url-status" class="url-status"></div>
+                </div>
               </div>
 
               <div class="image-preview" id="image-preview">
@@ -115,9 +125,10 @@
                   <!-- Input Image Preview -->
                   <div class="image-preview-panel">
                     <div class="image-preview-label">Input</div>
-                    <div class="image-preview-container">
+                    <div class="image-preview-container" id="input-preview-container">
                       <img id="preview-image" src="" alt="Uploaded pixel art preview" />
                       <canvas id="pixel-grid-overlay" class="pixel-grid-overlay"></canvas>
+                      <canvas id="crop-overlay" class="crop-overlay"></canvas>
                     </div>
                     <div class="image-info">
                       <span id="image-dimensions">-- x -- px</span>
@@ -127,6 +138,11 @@
                         <input type="checkbox" id="pixel-grid-toggle" />
                         <span>Show grid</span>
                       </label>
+                      <button type="button" class="crop-toggle-btn" id="crop-toggle-btn">Crop</button>
+                    </div>
+                    <div class="crop-controls" id="crop-controls">
+                      <button type="button" class="crop-btn crop-cancel-btn" id="crop-cancel-btn">Cancel</button>
+                      <button type="button" class="crop-btn crop-apply-btn" id="crop-apply-btn">Apply Crop</button>
                     </div>
                   </div>
 

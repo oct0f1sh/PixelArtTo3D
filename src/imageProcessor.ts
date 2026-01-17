@@ -664,6 +664,48 @@ function createColor(r: number, g: number, b: number): Color {
 }
 
 /**
+ * Loads an image from a URL and returns its ImageData.
+ * Uses crossOrigin = 'anonymous' to handle CORS-enabled servers.
+ *
+ * @param url - The URL of the image to load
+ * @returns Promise resolving to the ImageData of the loaded image
+ * @throws Error if the image cannot be loaded (CORS error, invalid URL, etc.)
+ */
+export function loadImageFromUrl(url: string): Promise<ImageData> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('Failed to get canvas 2D context'));
+        return;
+      }
+
+      try {
+        ctx.drawImage(img, 0, 0);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        resolve(imageData);
+      } catch (error) {
+        // This can happen if CORS headers are missing on the server
+        reject(new Error('CORS error: The server does not allow cross-origin image loading. Try downloading the image and uploading it instead.'));
+      }
+    };
+
+    img.onerror = () => {
+      reject(new Error('Failed to load image from URL. Please check that the URL is valid and accessible.'));
+    };
+
+    img.src = url;
+  });
+}
+
+/**
  * Loads an image from a File object and returns its ImageData
  *
  * @param file - The image file to load
