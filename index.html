@@ -539,9 +539,9 @@
 
                   <!-- Custom Size Sliders (hidden by default) -->
                   <div class="magnet-custom-settings hidden" id="magnet-custom-settings">
-                    <div class="control-group compact">
+                    <div class="control-group compact full-width">
                       <label class="control-label" for="magnet-diameter-slider">Diameter</label>
-                      <div class="range-container">
+                      <div class="range-container full-width">
                         <input
                           type="range"
                           id="magnet-diameter-slider"
@@ -550,13 +550,16 @@
                           step="0.5"
                           value="8"
                         />
-                        <span class="range-value" id="magnet-diameter-value">8.0 mm</span>
+                        <div class="range-value-input">
+                          <input type="number" id="magnet-diameter-value" min="1" max="30" step="0.1" value="8.0" />
+                          <span class="range-unit">mm</span>
+                        </div>
                       </div>
                     </div>
 
-                    <div class="control-group compact">
+                    <div class="control-group compact full-width">
                       <label class="control-label" for="magnet-height-slider">Thickness</label>
-                      <div class="range-container">
+                      <div class="range-container full-width">
                         <input
                           type="range"
                           id="magnet-height-slider"
@@ -565,26 +568,40 @@
                           step="0.5"
                           value="3"
                         />
-                        <span class="range-value" id="magnet-height-value">3.0 mm</span>
+                        <div class="range-value-input">
+                          <input type="number" id="magnet-height-value" min="0.5" max="20" step="0.1" value="3.0" />
+                          <span class="range-unit">mm</span>
+                        </div>
                       </div>
                     </div>
                   </div>
 
-                  <!-- Depth Slider (always visible) -->
-                  <div class="control-group compact">
-                    <label class="control-label" for="magnet-depth-slider">Depth</label>
-                    <div class="range-container">
-                      <input
-                        type="range"
-                        id="magnet-depth-slider"
-                        min="0"
-                        max="3"
-                        step="0.1"
-                        value="0.5"
-                      />
-                      <span class="range-value" id="magnet-depth-value">0.5 mm</span>
+                  <!-- Depth Controls -->
+                  <div class="control-group compact full-width">
+                    <div class="depth-header">
+                      <label class="control-label">Depth</label>
+                      <label class="toggle-label small">
+                        <input type="checkbox" id="magnet-center-toggle" />
+                        <span>Center in model</span>
+                      </label>
                     </div>
-                    <p class="control-hint">Distance from back to magnet cavity</p>
+                    <div class="depth-slider-container" id="depth-slider-container">
+                      <div class="range-container full-width">
+                        <input
+                          type="range"
+                          id="magnet-depth-slider"
+                          min="0"
+                          max="3"
+                          step="0.1"
+                          value="0.5"
+                        />
+                        <div class="range-value-input">
+                          <input type="number" id="magnet-depth-value" min="0" max="10" step="0.1" value="0.5" />
+                          <span class="range-unit">mm</span>
+                        </div>
+                      </div>
+                      <p class="control-hint">Distance from back to magnet cavity</p>
+                    </div>
                   </div>
 
                   <!-- Buffer Zone Info -->

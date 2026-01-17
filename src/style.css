@@ -550,8 +550,14 @@ select {
 }
 
 .range-value-input {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.range-value-input input[type="number"] {
   width: 50px;
-  flex: 0 0 50px;
   padding: var(--spacing-xs) var(--spacing-sm);
   background-color: var(--bg-tertiary);
   border: 1px solid var(--border);
@@ -563,20 +569,71 @@ select {
   font-weight: 500;
 }
 
-.range-value-input:focus {
+.range-value-input input[type="number"]:focus {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 2px var(--accent-glow);
 }
 
-.range-value-input::-webkit-inner-spin-button,
-.range-value-input::-webkit-outer-spin-button {
+.range-value-input input[type="number"]::-webkit-inner-spin-button,
+.range-value-input input[type="number"]::-webkit-outer-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
 
-.range-value-input[type="number"] {
+.range-value-input input[type="number"] {
   -moz-appearance: textfield;
+}
+
+.range-unit {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* Full-width control groups for magnet settings */
+.control-group.full-width {
+  width: 100%;
+}
+
+.range-container.full-width {
+  width: 100%;
+}
+
+.range-container.full-width input[type="range"] {
+  flex: 1;
+}
+
+/* Depth header with toggle */
+.depth-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-xs);
+}
+
+.depth-header .control-label {
+  margin-bottom: 0;
+}
+
+.toggle-label.small {
+  font-size: 0.75rem;
+  gap: var(--spacing-xs);
+}
+
+.toggle-label.small input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+}
+
+/* Disabled depth slider container */
+.depth-slider-container.disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.depth-slider-container.disabled input[type="range"],
+.depth-slider-container.disabled input[type="number"] {
+  cursor: not-allowed;
 }
 
 /* Stepper Input */

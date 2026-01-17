@@ -105,6 +105,7 @@ interface AppState {
   magnetDiameter: number;
   magnetHeight: number;
   magnetDepth: number;
+  magnetCenterDepth: boolean;
 
   exportFormat: 'stl' | '3mf';
   filename: string;
@@ -175,6 +176,7 @@ const state: AppState = {
   magnetDiameter: 8,
   magnetHeight: 3,
   magnetDepth: 0.5,
+  magnetCenterDepth: false,
 
   exportFormat: '3mf',
   filename: 'pixel_art_keychain',
@@ -283,11 +285,13 @@ const elements = {
   magnetPresetToggle: document.getElementById('magnet-preset-toggle') as HTMLDivElement,
   magnetCustomSettings: document.getElementById('magnet-custom-settings') as HTMLDivElement,
   magnetDiameterSlider: document.getElementById('magnet-diameter-slider') as HTMLInputElement,
-  magnetDiameterValue: document.getElementById('magnet-diameter-value') as HTMLSpanElement,
+  magnetDiameterValue: document.getElementById('magnet-diameter-value') as HTMLInputElement,
   magnetHeightSlider: document.getElementById('magnet-height-slider') as HTMLInputElement,
-  magnetHeightValue: document.getElementById('magnet-height-value') as HTMLSpanElement,
+  magnetHeightValue: document.getElementById('magnet-height-value') as HTMLInputElement,
   magnetDepthSlider: document.getElementById('magnet-depth-slider') as HTMLInputElement,
-  magnetDepthValue: document.getElementById('magnet-depth-value') as HTMLSpanElement,
+  magnetDepthValue: document.getElementById('magnet-depth-value') as HTMLInputElement,
+  magnetCenterToggle: document.getElementById('magnet-center-toggle') as HTMLInputElement,
+  depthSliderContainer: document.getElementById('depth-slider-container') as HTMLDivElement,
   bufferBelow: document.getElementById('buffer-below') as HTMLSpanElement,
   bufferAbove: document.getElementById('buffer-above') as HTMLSpanElement,
   bufferTotal: document.getElementById('buffer-total') as HTMLSpanElement,
@@ -680,6 +684,12 @@ function updateMagnetCount(): void {
  */
 function updateMagnetBufferInfo(): void {
   const totalHeight = toMm(state.baseHeight + state.pixelHeight, state.unit);
+
+  // If center depth is enabled, calculate and update the depth
+  if (state.magnetCenterDepth) {
+    updateCenteredMagnetDepth();
+  }
+
   const belowMagnet = state.magnetDepth;
   const magnetTop = state.magnetDepth + state.magnetHeight;
   const aboveMagnet = totalHeight - magnetTop;
@@ -693,6 +703,22 @@ function updateMagnetBufferInfo(): void {
   if (aboveBufferItem) {
     aboveBufferItem.classList.toggle('warning', aboveMagnet < 0.5);
   }
+}
+
+/**
+ * Calculates and updates the magnet depth to center it in the model
+ */
+function updateCenteredMagnetDepth(): void {
+  const totalHeight = toMm(state.baseHeight + state.pixelHeight, state.unit);
+  const magnetHeight = state.magnetPreset === 'custom' ? state.magnetHeight : MAGNET_PRESETS[state.magnetPreset].height;
+
+  // Center the magnet: depth = (totalHeight - magnetHeight) / 2
+  const centeredDepth = Math.max(0, (totalHeight - magnetHeight) / 2);
+  state.magnetDepth = centeredDepth;
+
+  // Update UI
+  elements.magnetDepthSlider.value = centeredDepth.toFixed(1);
+  elements.magnetDepthValue.value = centeredDepth.toFixed(1);
 }
 
 /**
@@ -2722,9 +2748,9 @@ function setupEventListeners(): void {
         state.magnetDiameter = preset.diameter;
         state.magnetHeight = preset.height;
         elements.magnetDiameterSlider.value = String(preset.diameter);
-        elements.magnetDiameterValue.textContent = `${preset.diameter.toFixed(1)} mm`;
+        elements.magnetDiameterValue.value = preset.diameter.toFixed(1);
         elements.magnetHeightSlider.value = String(preset.height);
-        elements.magnetHeightValue.textContent = `${preset.height.toFixed(1)} mm`;
+        elements.magnetHeightValue.value = preset.height.toFixed(1);
       }
 
       // Update toggle button active states
@@ -2745,7 +2771,7 @@ function setupEventListeners(): void {
   // Magnet diameter slider (custom mode)
   elements.magnetDiameterSlider.addEventListener('input', () => {
     state.magnetDiameter = parseFloat(elements.magnetDiameterSlider.value);
-    elements.magnetDiameterValue.textContent = `${state.magnetDiameter.toFixed(1)} mm`;
+    elements.magnetDiameterValue.value = state.magnetDiameter.toFixed(1);
     updateMagnetPreviewConfig();
   });
 
@@ -2755,10 +2781,25 @@ function setupEventListeners(): void {
     }
   });
 
+  // Magnet diameter input (custom mode)
+  elements.magnetDiameterValue.addEventListener('change', () => {
+    const value = parseFloat(elements.magnetDiameterValue.value);
+    if (!isNaN(value) && value >= 1 && value <= 30) {
+      state.magnetDiameter = value;
+      elements.magnetDiameterSlider.value = String(value);
+      updateMagnetPreviewConfig();
+      if (state.quantizedResult && state.magnetEnabled && state.magnetPositions.length > 0) {
+        generateAndDisplay3D();
+      }
+    } else {
+      elements.magnetDiameterValue.value = state.magnetDiameter.toFixed(1);
+    }
+  });
+
   // Magnet height slider (custom mode)
   elements.magnetHeightSlider.addEventListener('input', () => {
     state.magnetHeight = parseFloat(elements.magnetHeightSlider.value);
-    elements.magnetHeightValue.textContent = `${state.magnetHeight.toFixed(1)} mm`;
+    elements.magnetHeightValue.value = state.magnetHeight.toFixed(1);
     updateMagnetBufferInfo();
     updateMagnetPreviewConfig();
   });
@@ -2769,10 +2810,45 @@ function setupEventListeners(): void {
     }
   });
 
+  // Magnet height input (custom mode)
+  elements.magnetHeightValue.addEventListener('change', () => {
+    const value = parseFloat(elements.magnetHeightValue.value);
+    if (!isNaN(value) && value >= 0.5 && value <= 20) {
+      state.magnetHeight = value;
+      elements.magnetHeightSlider.value = String(value);
+      updateMagnetBufferInfo();
+      updateMagnetPreviewConfig();
+      if (state.quantizedResult && state.magnetEnabled && state.magnetPositions.length > 0) {
+        generateAndDisplay3D();
+      }
+    } else {
+      elements.magnetHeightValue.value = state.magnetHeight.toFixed(1);
+    }
+  });
+
+  // Magnet center depth toggle
+  elements.magnetCenterToggle.addEventListener('change', () => {
+    state.magnetCenterDepth = elements.magnetCenterToggle.checked;
+
+    // Toggle disabled state of depth slider
+    elements.depthSliderContainer.classList.toggle('disabled', state.magnetCenterDepth);
+
+    if (state.magnetCenterDepth) {
+      // Calculate and apply centered depth
+      updateCenteredMagnetDepth();
+      updateMagnetPreviewConfig();
+      if (state.quantizedResult && state.magnetEnabled && state.magnetPositions.length > 0) {
+        generateAndDisplay3D();
+      }
+    }
+
+    updateMagnetBufferInfo();
+  });
+
   // Magnet depth slider
   elements.magnetDepthSlider.addEventListener('input', () => {
     state.magnetDepth = parseFloat(elements.magnetDepthSlider.value);
-    elements.magnetDepthValue.textContent = `${state.magnetDepth.toFixed(1)} mm`;
+    elements.magnetDepthValue.value = state.magnetDepth.toFixed(1);
     updateMagnetBufferInfo();
     updateMagnetPreviewConfig();
   });
@@ -2780,6 +2856,22 @@ function setupEventListeners(): void {
   elements.magnetDepthSlider.addEventListener('change', () => {
     if (state.quantizedResult && state.magnetEnabled && state.magnetPositions.length > 0) {
       generateAndDisplay3D();
+    }
+  });
+
+  // Magnet depth input
+  elements.magnetDepthValue.addEventListener('change', () => {
+    const value = parseFloat(elements.magnetDepthValue.value);
+    if (!isNaN(value) && value >= 0 && value <= 10) {
+      state.magnetDepth = value;
+      elements.magnetDepthSlider.value = String(value);
+      updateMagnetBufferInfo();
+      updateMagnetPreviewConfig();
+      if (state.quantizedResult && state.magnetEnabled && state.magnetPositions.length > 0) {
+        generateAndDisplay3D();
+      }
+    } else {
+      elements.magnetDepthValue.value = state.magnetDepth.toFixed(1);
     }
   });
 
