@@ -1114,6 +1114,142 @@ input[type="color"]::-moz-color-swatch {
 }
 
 /* ================================================
+   Magnet Compartment Options
+   ================================================ */
+
+.magnet-section {
+  margin-top: var(--spacing-md);
+  padding: var(--spacing-md);
+  background-color: var(--bg-elevated);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+
+.magnet-header {
+  margin-bottom: 0;
+}
+
+.magnet-header .checkbox-label {
+  font-weight: 500;
+}
+
+.magnet-options {
+  display: none;
+  margin-top: var(--spacing-sm);
+  padding-top: var(--spacing-sm);
+  border-top: 1px solid var(--border);
+}
+
+.magnet-options.visible {
+  display: block;
+}
+
+.magnet-options .toggle-group.compact {
+  margin-bottom: var(--spacing-sm);
+}
+
+.magnet-custom-settings {
+  margin-top: var(--spacing-xs);
+}
+
+.magnet-custom-settings.hidden {
+  display: none;
+}
+
+.magnet-custom-settings .control-group.compact {
+  margin-bottom: var(--spacing-xs);
+}
+
+.magnet-custom-settings .control-group.compact:last-child {
+  margin-bottom: 0;
+}
+
+.magnet-custom-settings .control-label {
+  font-size: var(--font-size-sm);
+  min-width: 60px;
+}
+
+.magnet-options .control-group.compact {
+  margin-bottom: var(--spacing-sm);
+}
+
+.magnet-buffer-info {
+  margin-top: var(--spacing-sm);
+  padding: var(--spacing-sm);
+  background-color: var(--bg-tertiary);
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--border);
+}
+
+.buffer-zone-display {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.buffer-item {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--font-size-sm);
+}
+
+.buffer-item .buffer-label {
+  color: var(--text-tertiary);
+}
+
+.buffer-item .buffer-value {
+  font-family: var(--font-mono);
+  color: var(--primary);
+}
+
+.buffer-item.total {
+  padding-top: var(--spacing-xs);
+  border-top: 1px solid var(--border);
+  font-weight: 500;
+}
+
+.buffer-item.total .buffer-label {
+  color: var(--text-secondary);
+}
+
+.buffer-item.warning .buffer-value {
+  color: var(--error);
+}
+
+.magnet-actions {
+  margin-top: var(--spacing-sm);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.magnet-count {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+
+.btn-small {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: var(--font-size-sm);
+}
+
+.magnet-position-info {
+  margin-top: var(--spacing-sm);
+  text-align: center;
+}
+
+.magnet-coords {
+  font-size: var(--font-size-sm);
+  color: var(--text-tertiary);
+  margin: 0;
+  font-family: var(--font-mono);
+}
+
+.magnet-coords.has-position {
+  color: var(--primary);
+}
+
+/* ================================================
    Color Reduce Options
    ================================================ */
 

@@ -44,6 +44,14 @@ export interface KeyholeOptions {
   outerDiameter: number; // mm, for floating (total ring size)
 }
 
+export interface MagnetOptions {
+  enabled: boolean;
+  positions: Array<{ x: number; y: number }>; // Multiple magnet positions in mm
+  diameter: number; // mm
+  height: number; // mm (magnet thickness)
+  depth: number; // mm (distance from back surface to cavity start)
+}
+
 export interface MeshGeneratorParams {
   pixelGrid: PixelGrid;
   palette: Color[];
@@ -51,6 +59,7 @@ export interface MeshGeneratorParams {
   pixelHeight?: number; // mm, default 2
   baseHeight?: number; // mm, default 1
   keyhole?: KeyholeOptions;
+  magnet?: MagnetOptions;
   /**
    * When true, generates full-height color meshes (y=0 to y=totalHeight) without a separate base.
    * This avoids overlapping faces when meshes are merged for STL export.
@@ -569,6 +578,74 @@ async function subtractCylinderManifold(
   }
 }
 
+/**
+ * Subtracts a magnet cavity (blind pocket) from the geometry.
+ * Unlike a through-hole, this creates a pocket starting from y=depth
+ * and extending to y=depth+magnetHeight.
+ */
+async function subtractMagnetCavityManifold(
+  geometry: THREE.BufferGeometry,
+  magnetPosition: { x: number; y: number },
+  diameter: number,
+  magnetHeight: number,
+  depth: number
+): Promise<THREE.BufferGeometry | null> {
+  try {
+    const wasm = await getManifold();
+    const { Manifold } = wasm;
+
+    // Convert THREE geometry to Manifold
+    const inputMesh = threeGeometryToManifoldMesh(geometry, wasm);
+    let inputManifold: InstanceType<typeof Manifold>;
+
+    try {
+      inputManifold = Manifold.ofMesh(inputMesh);
+    } catch {
+      console.error('Failed to create manifold from input geometry for magnet cavity');
+      return null;
+    }
+
+    // Create cylinder for the magnet cavity
+    const radius = diameter / 2;
+
+    // The cavity starts at y=depth and extends upward by magnetHeight
+    // Add small epsilon for clean boolean operations
+    const cavityYMin = depth - 0.01;
+    const cavityYMax = depth + magnetHeight + 0.01;
+    const cavityHeight = cavityYMax - cavityYMin;
+
+    // Create cylinder centered at origin along Z axis
+    let cylinder = Manifold.cylinder(cavityHeight, radius, radius, 32, true);
+
+    // Rotate 90 degrees around X to make it vertical (along Y axis)
+    cylinder = cylinder.rotate([90, 0, 0]);
+
+    // Translate to correct position
+    // In our coordinate system: X stays X, Y maps to Y, position.y maps to -Z
+    const centerY = (cavityYMin + cavityYMax) / 2;
+    cylinder = cylinder.translate([magnetPosition.x, centerY, -magnetPosition.y]);
+
+    // Perform boolean subtraction
+    const result = inputManifold.subtract(cylinder);
+
+    // Get mesh from result
+    const resultMesh = result.getMesh();
+
+    // Convert back to THREE geometry
+    const resultGeometry = manifoldMeshToThreeGeometry(resultMesh);
+
+    // Cleanup WASM memory
+    inputManifold.delete();
+    cylinder.delete();
+    result.delete();
+
+    return resultGeometry;
+  } catch (error) {
+    console.error('Magnet cavity CSG subtraction failed:', error);
+    return null;
+  }
+}
+
 
 /**
  * Creates a torus geometry for the floating keyhole style.
@@ -821,6 +898,47 @@ export async function generateMeshesAsync(params: MeshGeneratorParams): Promise<
           geometry.dispose();
           result.colorMeshes.set(colorIndex, newGeometry);
           result.keyholeApplied = true;
+        }
+      }
+    }
+  }
+
+  // Apply magnet cavities if enabled
+  if (params.magnet?.enabled && params.magnet.positions.length > 0) {
+    console.log('Magnet: Applying cavities at', params.magnet.positions.length, 'positions');
+
+    const { diameter, height: magnetHeight, depth } = params.magnet;
+
+    for (const magnetPosition of params.magnet.positions) {
+      // Apply to base mesh
+      if (result.baseMesh && result.baseMesh.attributes.position?.count > 0) {
+        const newBaseMesh = await subtractMagnetCavityManifold(
+          result.baseMesh,
+          magnetPosition,
+          diameter,
+          magnetHeight,
+          depth
+        );
+        if (newBaseMesh) {
+          result.baseMesh.dispose();
+          result.baseMesh = newBaseMesh;
+        }
+      }
+
+      // Apply to color meshes (needed for STL single mesh mode)
+      for (const [colorIndex, geometry] of result.colorMeshes) {
+        if (geometry.attributes.position?.count > 0) {
+          const newGeometry = await subtractMagnetCavityManifold(
+            geometry,
+            magnetPosition,
+            diameter,
+            magnetHeight,
+            depth
+          );
+          if (newGeometry) {
+            geometry.dispose();
+            result.colorMeshes.set(colorIndex, newGeometry);
+          }
         }
       }
     }

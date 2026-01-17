@@ -97,6 +97,15 @@ interface AppState {
   innerDiameter: number;
   outerDiameter: number;
   isDraggingKeyhole: boolean;
+
+  // Magnet compartment settings
+  magnetEnabled: boolean;
+  magnetPositions: Array<{ x: number; y: number }>;
+  magnetPreset: 'small' | 'medium' | 'large' | 'custom';
+  magnetDiameter: number;
+  magnetHeight: number;
+  magnetDepth: number;
+
   exportFormat: 'stl' | '3mf';
   filename: string;
 
@@ -147,6 +156,15 @@ const state: AppState = {
   innerDiameter: 4,
   outerDiameter: 8,
   isDraggingKeyhole: false,
+
+  // Magnet compartment settings
+  magnetEnabled: false,
+  magnetPositions: [],
+  magnetPreset: 'medium',
+  magnetDiameter: 8,
+  magnetHeight: 3,
+  magnetDepth: 0.5,
+
   exportFormat: '3mf',
   filename: 'pixel_art_keychain',
 
@@ -236,6 +254,24 @@ const elements = {
   outerDiameterSlider: document.getElementById('outer-diameter-slider') as HTMLInputElement,
   outerDiameterValue: document.getElementById('outer-diameter-value') as HTMLSpanElement,
   keyholeCoords: document.getElementById('keyhole-coords') as HTMLParagraphElement,
+
+  // Magnet settings
+  magnetToggle: document.getElementById('magnet-toggle') as HTMLInputElement,
+  magnetOptions: document.getElementById('magnet-options') as HTMLDivElement,
+  magnetPresetToggle: document.getElementById('magnet-preset-toggle') as HTMLDivElement,
+  magnetCustomSettings: document.getElementById('magnet-custom-settings') as HTMLDivElement,
+  magnetDiameterSlider: document.getElementById('magnet-diameter-slider') as HTMLInputElement,
+  magnetDiameterValue: document.getElementById('magnet-diameter-value') as HTMLSpanElement,
+  magnetHeightSlider: document.getElementById('magnet-height-slider') as HTMLInputElement,
+  magnetHeightValue: document.getElementById('magnet-height-value') as HTMLSpanElement,
+  magnetDepthSlider: document.getElementById('magnet-depth-slider') as HTMLInputElement,
+  magnetDepthValue: document.getElementById('magnet-depth-value') as HTMLSpanElement,
+  bufferBelow: document.getElementById('buffer-below') as HTMLSpanElement,
+  bufferAbove: document.getElementById('buffer-above') as HTMLSpanElement,
+  bufferTotal: document.getElementById('buffer-total') as HTMLSpanElement,
+  magnetCount: document.getElementById('magnet-count') as HTMLSpanElement,
+  clearMagnetsBtn: document.getElementById('clear-magnets-btn') as HTMLButtonElement,
+  magnetCoords: document.getElementById('magnet-coords') as HTMLParagraphElement,
 
   // Preview
   previewContainer: document.getElementById('preview-container') as HTMLDivElement,
@@ -578,6 +614,75 @@ function updateKeyholeCoords(): void {
   } else {
     elements.keyholeCoords.textContent = 'Drag on 3D preview to position';
     elements.keyholeCoords.classList.remove('has-position');
+  }
+}
+
+// Magnet presets
+const MAGNET_PRESETS = {
+  small: { diameter: 6, height: 2 },
+  medium: { diameter: 8, height: 3 },
+  large: { diameter: 10, height: 3 },
+};
+
+/**
+ * Updates the magnet count display in the UI
+ */
+function updateMagnetCount(): void {
+  const count = state.magnetPositions.length;
+  elements.magnetCount.textContent = `${count} magnet${count === 1 ? '' : 's'} placed`;
+
+  if (count > 0) {
+    elements.magnetCoords.textContent = `${count} position${count === 1 ? '' : 's'} set`;
+    elements.magnetCoords.classList.add('has-position');
+  } else {
+    elements.magnetCoords.textContent = 'Click on model to add magnets';
+    elements.magnetCoords.classList.remove('has-position');
+  }
+}
+
+/**
+ * Updates the magnet buffer zone info display
+ */
+function updateMagnetBufferInfo(): void {
+  const totalHeight = toMm(state.baseHeight + state.pixelHeight, state.unit);
+  const belowMagnet = state.magnetDepth;
+  const magnetTop = state.magnetDepth + state.magnetHeight;
+  const aboveMagnet = totalHeight - magnetTop;
+
+  elements.bufferBelow.textContent = `${belowMagnet.toFixed(1)} mm`;
+  elements.bufferAbove.textContent = `${aboveMagnet.toFixed(1)} mm`;
+  elements.bufferTotal.textContent = `${totalHeight.toFixed(1)} mm`;
+
+  // Add warning class if insufficient material above
+  const aboveBufferItem = elements.bufferAbove.closest('.buffer-item');
+  if (aboveBufferItem) {
+    aboveBufferItem.classList.toggle('warning', aboveMagnet < 0.5);
+  }
+}
+
+/**
+ * Gets magnet dimensions from the current preset or custom values
+ */
+function getMagnetDimensions(): { diameter: number; height: number } {
+  if (state.magnetPreset === 'custom') {
+    return { diameter: state.magnetDiameter, height: state.magnetHeight };
+  }
+  return MAGNET_PRESETS[state.magnetPreset];
+}
+
+/**
+ * Updates the magnet preview config in the 3D preview
+ */
+function updateMagnetPreviewConfig(): void {
+  if (state.previewController && state.magnetEnabled) {
+    const dims = getMagnetDimensions();
+    state.previewController.updateMagnetConfig({
+      diameter: dims.diameter,
+      height: dims.height,
+      depth: state.magnetDepth,
+    });
+    // Update placed magnet indicators with new positions
+    state.previewController.setMagnetPositions(state.magnetPositions);
   }
 }
 
@@ -1148,6 +1253,7 @@ async function generateAndDisplay3D(): Promise<void> {
 
   // Generate meshes (pass 0 for baseHeight if base is disabled)
   // Use async version for manifold-correct holepunch
+  const magnetDims = getMagnetDimensions();
   state.meshResult = await generateMeshesAsync({
     pixelGrid: pixels,
     palette,
@@ -1161,6 +1267,13 @@ async function generateAndDisplay3D(): Promise<void> {
       holeDiameter: state.holeDiameter,
       innerDiameter: state.innerDiameter,
       outerDiameter: state.outerDiameter,
+    },
+    magnet: {
+      enabled: state.magnetEnabled,
+      positions: state.magnetPositions,
+      diameter: magnetDims.diameter,
+      height: magnetDims.height,
+      depth: state.magnetDepth,
     },
   });
 
@@ -1257,6 +1370,7 @@ async function handleExport(): Promise<void> {
         console.log(`  Keyhole position: (${state.keyholePosition.x.toFixed(2)}, ${state.keyholePosition.y.toFixed(2)})`);
       }
 
+      const exportMagnetDims = getMagnetDimensions();
       const stlMeshResult = await generateMeshesAsync({
         pixelGrid: pixels,
         palette,
@@ -1270,6 +1384,13 @@ async function handleExport(): Promise<void> {
           holeDiameter: state.holeDiameter,
           innerDiameter: state.innerDiameter,
           outerDiameter: state.outerDiameter,
+        },
+        magnet: {
+          enabled: state.magnetEnabled,
+          positions: state.magnetPositions,
+          diameter: exportMagnetDims.diameter,
+          height: exportMagnetDims.height,
+          depth: state.magnetDepth,
         },
         singleMeshMode: true,
       });
@@ -1323,6 +1444,7 @@ async function handleExport(): Promise<void> {
         holeDiameter: state.holeDiameter,
       });
 
+      const export3mfMagnetDims = getMagnetDimensions();
       const exportMeshResult = await generateMeshesAsync({
         pixelGrid: pixels,
         palette,
@@ -1336,6 +1458,13 @@ async function handleExport(): Promise<void> {
           holeDiameter: state.holeDiameter,
           innerDiameter: state.innerDiameter,
           outerDiameter: state.outerDiameter,
+        },
+        magnet: {
+          enabled: state.magnetEnabled,
+          positions: state.magnetPositions,
+          diameter: export3mfMagnetDims.diameter,
+          height: export3mfMagnetDims.height,
+          depth: state.magnetDepth,
         },
       });
 
@@ -1831,6 +1960,10 @@ function setupEventListeners(): void {
   elements.pixelHeightSlider.addEventListener('input', () => {
     state.pixelHeight = parseFloat(elements.pixelHeightSlider.value) || 2;
     elements.pixelHeightValue.textContent = state.pixelHeight.toFixed(state.unit === 'inches' ? 2 : 1);
+    // Update magnet buffer info since total height affects buffer zone
+    if (state.magnetEnabled) {
+      updateMagnetBufferInfo();
+    }
   });
 
   elements.pixelHeightSlider.addEventListener('change', () => {
@@ -1849,6 +1982,11 @@ function setupEventListeners(): void {
       elements.baseOptions.classList.add('hidden');
     }
 
+    // Update magnet buffer info since total height affects buffer zone
+    if (state.magnetEnabled) {
+      updateMagnetBufferInfo();
+    }
+
     if (state.quantizedResult) {
       updateColorPalette();
       generateAndDisplay3D();
@@ -1859,6 +1997,10 @@ function setupEventListeners(): void {
   elements.baseHeightSlider.addEventListener('input', () => {
     state.baseHeight = parseFloat(elements.baseHeightSlider.value) || 1;
     elements.baseHeightValue.textContent = state.baseHeight.toFixed(state.unit === 'inches' ? 2 : 1);
+    // Update magnet buffer info since total height affects buffer zone
+    if (state.magnetEnabled) {
+      updateMagnetBufferInfo();
+    }
   });
 
   elements.baseHeightSlider.addEventListener('change', () => {
@@ -2001,6 +2143,151 @@ function setupEventListeners(): void {
 
   elements.outerDiameterSlider.addEventListener('change', () => {
     if (state.quantizedResult && state.keyholeEnabled && state.keyholePosition) {
+      generateAndDisplay3D();
+    }
+  });
+
+  // ============================================================================
+  // Magnet Compartment Event Handlers
+  // ============================================================================
+
+  // Magnet toggle
+  elements.magnetToggle.addEventListener('change', () => {
+    state.magnetEnabled = elements.magnetToggle.checked;
+    trackEvent('feature_toggle', { feature: 'magnet_compartment', enabled: state.magnetEnabled });
+
+    if (state.magnetEnabled) {
+      elements.magnetOptions.classList.add('visible');
+      updateMagnetBufferInfo();
+      updateMagnetCount();
+
+      // Enable magnet placement mode on the preview
+      if (state.previewController) {
+        const dims = getMagnetDimensions();
+        state.previewController.enableMagnetPlacement(
+          (pos) => {
+            // Add new magnet position
+            state.magnetPositions.push(pos);
+            updateMagnetCount();
+
+            // Update preview indicators
+            if (state.previewController) {
+              state.previewController.setMagnetPositions(state.magnetPositions);
+            }
+
+            // Regenerate mesh
+            if (state.quantizedResult) {
+              generateAndDisplay3D();
+            }
+          },
+          {
+            diameter: dims.diameter,
+            height: dims.height,
+            depth: state.magnetDepth,
+          }
+        );
+      }
+    } else {
+      elements.magnetOptions.classList.remove('visible');
+
+      // Disable magnet placement mode
+      if (state.previewController) {
+        state.previewController.disableMagnetPlacement();
+      }
+    }
+
+    if (state.quantizedResult) {
+      generateAndDisplay3D();
+    }
+  });
+
+  // Magnet preset toggle
+  elements.magnetPresetToggle.addEventListener('change', (e) => {
+    const target = e.target as HTMLInputElement;
+    if (target.type === 'radio' && target.checked) {
+      state.magnetPreset = target.value as 'small' | 'medium' | 'large' | 'custom';
+
+      // Toggle custom settings visibility
+      if (state.magnetPreset === 'custom') {
+        elements.magnetCustomSettings.classList.remove('hidden');
+      } else {
+        elements.magnetCustomSettings.classList.add('hidden');
+        // Update diameter and height from preset
+        const preset = MAGNET_PRESETS[state.magnetPreset];
+        state.magnetDiameter = preset.diameter;
+        state.magnetHeight = preset.height;
+        elements.magnetDiameterSlider.value = String(preset.diameter);
+        elements.magnetDiameterValue.textContent = `${preset.diameter.toFixed(1)} mm`;
+        elements.magnetHeightSlider.value = String(preset.height);
+        elements.magnetHeightValue.textContent = `${preset.height.toFixed(1)} mm`;
+      }
+
+      // Update toggle button active states
+      elements.magnetPresetToggle.querySelectorAll('.toggle-option').forEach(opt => {
+        const input = opt.querySelector('input') as HTMLInputElement;
+        opt.classList.toggle('active', input.checked);
+      });
+
+      updateMagnetBufferInfo();
+      updateMagnetPreviewConfig();
+
+      if (state.quantizedResult && state.magnetEnabled && state.magnetPositions.length > 0) {
+        generateAndDisplay3D();
+      }
+    }
+  });
+
+  // Magnet diameter slider (custom mode)
+  elements.magnetDiameterSlider.addEventListener('input', () => {
+    state.magnetDiameter = parseFloat(elements.magnetDiameterSlider.value);
+    elements.magnetDiameterValue.textContent = `${state.magnetDiameter.toFixed(1)} mm`;
+    updateMagnetPreviewConfig();
+  });
+
+  elements.magnetDiameterSlider.addEventListener('change', () => {
+    if (state.quantizedResult && state.magnetEnabled && state.magnetPositions.length > 0) {
+      generateAndDisplay3D();
+    }
+  });
+
+  // Magnet height slider (custom mode)
+  elements.magnetHeightSlider.addEventListener('input', () => {
+    state.magnetHeight = parseFloat(elements.magnetHeightSlider.value);
+    elements.magnetHeightValue.textContent = `${state.magnetHeight.toFixed(1)} mm`;
+    updateMagnetBufferInfo();
+    updateMagnetPreviewConfig();
+  });
+
+  elements.magnetHeightSlider.addEventListener('change', () => {
+    if (state.quantizedResult && state.magnetEnabled && state.magnetPositions.length > 0) {
+      generateAndDisplay3D();
+    }
+  });
+
+  // Magnet depth slider
+  elements.magnetDepthSlider.addEventListener('input', () => {
+    state.magnetDepth = parseFloat(elements.magnetDepthSlider.value);
+    elements.magnetDepthValue.textContent = `${state.magnetDepth.toFixed(1)} mm`;
+    updateMagnetBufferInfo();
+    updateMagnetPreviewConfig();
+  });
+
+  elements.magnetDepthSlider.addEventListener('change', () => {
+    if (state.quantizedResult && state.magnetEnabled && state.magnetPositions.length > 0) {
+      generateAndDisplay3D();
+    }
+  });
+
+  // Clear all magnets button
+  elements.clearMagnetsBtn.addEventListener('click', () => {
+    state.magnetPositions = [];
+    updateMagnetCount();
+
+    if (state.previewController) {
+      state.previewController.clearMagnetIndicators();
+    }
+
+    if (state.quantizedResult && state.magnetEnabled) {
       generateAndDisplay3D();
     }
   });

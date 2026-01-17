@@ -483,6 +483,124 @@
                   </div>
                 </div>
               </div>
+
+              <!-- Magnet Compartment Options -->
+              <div class="magnet-section">
+                <div class="magnet-header">
+                  <label class="checkbox-group">
+                    <input
+                      type="checkbox"
+                      id="magnet-toggle"
+                      class="checkbox-input"
+                    />
+                    <span class="checkbox-label">Add Magnet Compartment</span>
+                  </label>
+                </div>
+
+                <div class="magnet-options" id="magnet-options">
+                  <!-- Size Presets -->
+                  <div class="control-group">
+                    <label class="control-label">Size Preset</label>
+                    <div class="toggle-group compact" id="magnet-preset-toggle">
+                      <label class="toggle-option">
+                        <input type="radio" name="magnet-preset" value="small" />
+                        <span>6x2</span>
+                      </label>
+                      <label class="toggle-option active">
+                        <input type="radio" name="magnet-preset" value="medium" checked />
+                        <span>8x3</span>
+                      </label>
+                      <label class="toggle-option">
+                        <input type="radio" name="magnet-preset" value="large" />
+                        <span>10x3</span>
+                      </label>
+                      <label class="toggle-option">
+                        <input type="radio" name="magnet-preset" value="custom" />
+                        <span>Custom</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <!-- Custom Size Sliders (hidden by default) -->
+                  <div class="magnet-custom-settings hidden" id="magnet-custom-settings">
+                    <div class="control-group compact">
+                      <label class="control-label" for="magnet-diameter-slider">Diameter</label>
+                      <div class="range-container">
+                        <input
+                          type="range"
+                          id="magnet-diameter-slider"
+                          min="4"
+                          max="15"
+                          step="0.5"
+                          value="8"
+                        />
+                        <span class="range-value" id="magnet-diameter-value">8.0 mm</span>
+                      </div>
+                    </div>
+
+                    <div class="control-group compact">
+                      <label class="control-label" for="magnet-height-slider">Thickness</label>
+                      <div class="range-container">
+                        <input
+                          type="range"
+                          id="magnet-height-slider"
+                          min="1"
+                          max="6"
+                          step="0.5"
+                          value="3"
+                        />
+                        <span class="range-value" id="magnet-height-value">3.0 mm</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Depth Slider (always visible) -->
+                  <div class="control-group compact">
+                    <label class="control-label" for="magnet-depth-slider">Depth</label>
+                    <div class="range-container">
+                      <input
+                        type="range"
+                        id="magnet-depth-slider"
+                        min="0"
+                        max="3"
+                        step="0.1"
+                        value="0.5"
+                      />
+                      <span class="range-value" id="magnet-depth-value">0.5 mm</span>
+                    </div>
+                    <p class="control-hint">Distance from back to magnet cavity</p>
+                  </div>
+
+                  <!-- Buffer Zone Info -->
+                  <div class="magnet-buffer-info" id="magnet-buffer-info">
+                    <div class="buffer-zone-display">
+                      <div class="buffer-item">
+                        <span class="buffer-label">Below magnet:</span>
+                        <span class="buffer-value" id="buffer-below">0.5 mm</span>
+                      </div>
+                      <div class="buffer-item">
+                        <span class="buffer-label">Above magnet:</span>
+                        <span class="buffer-value" id="buffer-above">-- mm</span>
+                      </div>
+                      <div class="buffer-item total">
+                        <span class="buffer-label">Total height:</span>
+                        <span class="buffer-value" id="buffer-total">-- mm</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Magnet Count and Clear -->
+                  <div class="magnet-actions">
+                    <span class="magnet-count" id="magnet-count">0 magnets placed</span>
+                    <button type="button" class="btn-secondary btn-small" id="clear-magnets-btn">Clear All</button>
+                  </div>
+
+                  <!-- Position Info -->
+                  <div class="magnet-position-info">
+                    <p class="magnet-coords" id="magnet-coords">Click on model to add magnets</p>
+                  </div>
+                </div>
+              </div>
             </div>
           </article>
 

@@ -8,6 +8,12 @@ export interface KeyholePreviewConfig {
   outerDiameter: number;
 }
 
+export interface MagnetPreviewConfig {
+  diameter: number;
+  height: number;
+  depth: number;
+}
+
 export interface PreviewController {
   updateMesh(meshes: THREE.Mesh[]): void;
   dispose(): void;
@@ -20,6 +26,15 @@ export interface PreviewController {
   ): void;
   disableKeyholePlacement(): void;
   updateKeyholeConfig(config: KeyholePreviewConfig): void;
+  // Magnet placement
+  enableMagnetPlacement(
+    onMagnetAdded: (pos: { x: number; y: number }) => void,
+    config?: MagnetPreviewConfig
+  ): void;
+  disableMagnetPlacement(): void;
+  updateMagnetConfig(config: MagnetPreviewConfig): void;
+  setMagnetPositions(positions: Array<{ x: number; y: number }>): void;
+  clearMagnetIndicators(): void;
 }
 
 const BACKGROUND_COLOR = 0x1a1a1a;
@@ -99,6 +114,18 @@ export function initPreview(container: HTMLElement): PreviewController {
     innerDiameter: 4,
     outerDiameter: 8,
   };
+
+  // Magnet placement state
+  let magnetPlacementEnabled = false;
+  let magnetOnMagnetAdded: ((pos: { x: number; y: number }) => void) | null = null;
+  let magnetIndicators: THREE.Mesh[] = [];
+  let magnetHoverIndicator: THREE.Mesh | null = null;
+  let magnetConfig: MagnetPreviewConfig = {
+    diameter: 8,
+    height: 3,
+    depth: 0.5,
+  };
+
   const raycaster = new THREE.Raycaster();
   const mousePosition = new THREE.Vector2();
 
@@ -199,6 +226,118 @@ export function initPreview(container: HTMLElement): PreviewController {
     oldGeometry.dispose();
   }
 
+  // Create magnet indicator geometry (cylinder for the magnet cavity)
+  function createMagnetIndicatorGeometry(): THREE.BufferGeometry {
+    const radius = magnetConfig.diameter / 2;
+    const height = magnetConfig.height;
+    return new THREE.CylinderGeometry(radius, radius, height, 16);
+  }
+
+  // Create a magnet indicator mesh (wireframe for hover, solid for placed)
+  function createMagnetIndicatorMesh(isHover: boolean): THREE.Mesh {
+    const geometry = createMagnetIndicatorGeometry();
+    const material = new THREE.MeshBasicMaterial({
+      color: isHover ? 0xff8800 : 0xff6600, // Orange
+      wireframe: isHover,
+      transparent: true,
+      opacity: isHover ? 0.6 : 0.8,
+    });
+    const indicator = new THREE.Mesh(geometry, material);
+    indicator.visible = false;
+    scene.add(indicator);
+    return indicator;
+  }
+
+  // Update magnet hover indicator geometry when config changes
+  function updateMagnetIndicatorGeometry(): void {
+    if (magnetHoverIndicator) {
+      const oldGeometry = magnetHoverIndicator.geometry;
+      magnetHoverIndicator.geometry = createMagnetIndicatorGeometry();
+      oldGeometry.dispose();
+    }
+    // Update all placed magnet indicators
+    magnetIndicators.forEach((indicator) => {
+      const oldGeometry = indicator.geometry;
+      indicator.geometry = createMagnetIndicatorGeometry();
+      oldGeometry.dispose();
+    });
+  }
+
+  // Position a magnet indicator at the correct Y position (based on depth)
+  function positionMagnetIndicator(indicator: THREE.Mesh, worldX: number, worldZ: number): void {
+    // Magnet is positioned from the back (y=depth to y=depth+height)
+    // Center of cylinder should be at y = depth + height/2
+    const centerY = magnetConfig.depth + magnetConfig.height / 2;
+    indicator.position.set(worldX, centerY, worldZ);
+  }
+
+  // Update magnet hover indicator position based on mouse intersection
+  function updateMagnetHoverPosition(event: MouseEvent): { x: number; y: number } | null {
+    if (!modelBounds || currentMeshes.length === 0) return null;
+
+    // Calculate mouse position in normalized device coordinates
+    const rect = renderer.domElement.getBoundingClientRect();
+    mousePosition.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    mousePosition.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+    // Update raycaster
+    raycaster.setFromCamera(mousePosition, camera);
+
+    // Check intersection with all meshes
+    const intersects = raycaster.intersectObjects(currentMeshes, false);
+
+    if (intersects.length > 0) {
+      const intersection = intersects[0];
+
+      // Get the intersection point in world coordinates
+      const worldPoint = intersection.point.clone();
+
+      // Account for mesh group offset to get original model coordinates
+      const modelPoint = worldPoint.clone().sub(meshGroup.position);
+
+      // Update hover indicator position
+      if (magnetHoverIndicator) {
+        positionMagnetIndicator(magnetHoverIndicator, worldPoint.x, worldPoint.z);
+        magnetHoverIndicator.visible = true;
+      }
+
+      // Return position in mm (X and Z in model space, Z maps to Y for 2D position)
+      return {
+        x: modelPoint.x,
+        y: -modelPoint.z, // Negate because Z axis is inverted in 3D view
+      };
+    }
+
+    // Hide indicator if no intersection
+    if (magnetHoverIndicator) {
+      magnetHoverIndicator.visible = false;
+    }
+
+    return null;
+  }
+
+  // Add a placed magnet indicator at the given position
+  function addPlacedMagnetIndicator(position: { x: number; y: number }): void {
+    const indicator = createMagnetIndicatorMesh(false);
+    // Convert 2D position to 3D world coordinates
+    // Account for mesh group offset
+    const worldX = position.x + meshGroup.position.x;
+    const worldZ = -position.y + meshGroup.position.z; // Negate Y for Z
+    positionMagnetIndicator(indicator, worldX, worldZ);
+    indicator.visible = true;
+    magnetIndicators.push(indicator);
+  }
+
+  // Clear all placed magnet indicators
+  function clearAllMagnetIndicators(): void {
+    magnetIndicators.forEach((indicator) => {
+      scene.remove(indicator);
+      indicator.geometry.dispose();
+      (indicator.material as THREE.Material).dispose();
+    });
+    magnetIndicators = [];
+  }
+
   // Update keyhole indicator position based on mouse intersection
   function updateKeyholeIndicatorPosition(event: MouseEvent): { x: number; y: number } | null {
     if (!modelBounds || currentMeshes.length === 0) return null;
@@ -239,31 +378,48 @@ export function initPreview(container: HTMLElement): PreviewController {
     return null;
   }
 
-  // Mouse event handlers for keyhole placement
+  // Mouse event handlers for keyhole and magnet placement
   function handleMouseDown(event: MouseEvent): void {
-    if (!keyholePlacementEnabled) return;
-
     // Only respond to left mouse button
     if (event.button !== 0) return;
 
-    const pos = updateKeyholeIndicatorPosition(event);
-    if (pos) {
-      isDraggingKeyhole = true;
-      controls.enabled = false; // Disable orbit controls while dragging
+    // Magnet placement: click to add
+    if (magnetPlacementEnabled) {
+      const pos = updateMagnetHoverPosition(event);
+      if (pos && magnetOnMagnetAdded) {
+        magnetOnMagnetAdded(pos);
+      }
+      return;
+    }
 
-      if (keyholeOnPositionChange) {
-        keyholeOnPositionChange(pos);
+    // Keyhole placement: drag to position
+    if (keyholePlacementEnabled) {
+      const pos = updateKeyholeIndicatorPosition(event);
+      if (pos) {
+        isDraggingKeyhole = true;
+        controls.enabled = false; // Disable orbit controls while dragging
+
+        if (keyholeOnPositionChange) {
+          keyholeOnPositionChange(pos);
+        }
       }
     }
   }
 
   function handleMouseMove(event: MouseEvent): void {
-    if (!keyholePlacementEnabled) return;
+    // Magnet placement: update hover indicator
+    if (magnetPlacementEnabled) {
+      updateMagnetHoverPosition(event);
+      return;
+    }
 
-    const pos = updateKeyholeIndicatorPosition(event);
+    // Keyhole placement: update position while dragging
+    if (keyholePlacementEnabled) {
+      const pos = updateKeyholeIndicatorPosition(event);
 
-    if (isDraggingKeyhole && pos && keyholeOnPositionChange) {
-      keyholeOnPositionChange(pos);
+      if (isDraggingKeyhole && pos && keyholeOnPositionChange) {
+        keyholeOnPositionChange(pos);
+      }
     }
   }
 
@@ -414,6 +570,15 @@ export function initPreview(container: HTMLElement): PreviewController {
       keyholeIndicator = null;
     }
 
+    // Dispose magnet indicators
+    clearAllMagnetIndicators();
+    if (magnetHoverIndicator) {
+      scene.remove(magnetHoverIndicator);
+      magnetHoverIndicator.geometry.dispose();
+      (magnetHoverIndicator.material as THREE.Material).dispose();
+      magnetHoverIndicator = null;
+    }
+
     // Dispose grid
     if (gridHelper) {
       scene.remove(gridHelper);
@@ -479,6 +644,59 @@ export function initPreview(container: HTMLElement): PreviewController {
     }
   }
 
+  // Magnet placement methods
+  function enableMagnetPlacement(
+    onMagnetAdded: (pos: { x: number; y: number }) => void,
+    config?: MagnetPreviewConfig
+  ): void {
+    magnetPlacementEnabled = true;
+    magnetOnMagnetAdded = onMagnetAdded;
+
+    // Update config if provided
+    if (config) {
+      magnetConfig = config;
+    }
+
+    // Create hover indicator if not exists
+    if (!magnetHoverIndicator) {
+      magnetHoverIndicator = createMagnetIndicatorMesh(true);
+    } else {
+      // Update geometry to match config
+      updateMagnetIndicatorGeometry();
+    }
+
+    // Change cursor to indicate placement mode
+    renderer.domElement.style.cursor = 'crosshair';
+  }
+
+  function disableMagnetPlacement(): void {
+    magnetPlacementEnabled = false;
+    magnetOnMagnetAdded = null;
+
+    // Hide hover indicator
+    if (magnetHoverIndicator) {
+      magnetHoverIndicator.visible = false;
+    }
+
+    // Reset cursor
+    renderer.domElement.style.cursor = '';
+  }
+
+  function updateMagnetConfigMethod(config: MagnetPreviewConfig): void {
+    magnetConfig = config;
+    updateMagnetIndicatorGeometry();
+  }
+
+  function setMagnetPositions(positions: Array<{ x: number; y: number }>): void {
+    // Clear existing placed indicators
+    clearAllMagnetIndicators();
+
+    // Create new indicators for each position
+    positions.forEach((pos) => {
+      addPlacedMagnetIndicator(pos);
+    });
+  }
+
   return {
     updateMesh,
     dispose,
@@ -487,5 +705,10 @@ export function initPreview(container: HTMLElement): PreviewController {
     enableKeyholePlacement,
     disableKeyholePlacement,
     updateKeyholeConfig,
+    enableMagnetPlacement,
+    disableMagnetPlacement,
+    updateMagnetConfig: updateMagnetConfigMethod,
+    setMagnetPositions,
+    clearMagnetIndicators: clearAllMagnetIndicators,
   };
 }
