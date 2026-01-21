@@ -645,6 +645,12 @@ const elements = {
   cropControls: document.getElementById('crop-controls') as HTMLDivElement,
   cropCancelBtn: document.getElementById('crop-cancel-btn') as HTMLButtonElement,
   cropApplyBtn: document.getElementById('crop-apply-btn') as HTMLButtonElement,
+
+  // Export Tutorial Modal
+  exportTutorialModal: document.getElementById('export-tutorial-modal') as HTMLDivElement,
+  modalPalette: document.getElementById('modal-palette') as HTMLDivElement,
+  modalCloseBtn: document.getElementById('modal-close-btn') as HTMLButtonElement,
+  modalOkBtn: document.getElementById('modal-ok-btn') as HTMLButtonElement,
 };
 
 // ============================================================================
@@ -952,6 +958,50 @@ function showStatus(message: string, type: 'success' | 'error'): void {
       elements.exportStatus.className = 'status-message';
     }, 3000);
   }
+}
+
+/**
+ * Shows the export tutorial modal with the color palette
+ */
+function showExportTutorial(): void {
+  if (!state.quantizedResult) return;
+
+  const { palette } = state.quantizedResult;
+
+  // Build the palette HTML for the modal
+  let paletteHtml = '';
+
+  // Add base color first if enabled
+  if (state.baseEnabled) {
+    paletteHtml += `
+      <div class="modal-palette-item">
+        <div class="modal-palette-swatch" style="background-color: ${state.baseColor}"></div>
+        <span class="modal-palette-label">base</span>
+      </div>
+    `;
+  }
+
+  // Add color layers
+  palette.forEach((color, index) => {
+    paletteHtml += `
+      <div class="modal-palette-item">
+        <div class="modal-palette-swatch" style="background-color: ${color.hex}"></div>
+        <span class="modal-palette-label">color_${index + 1}</span>
+      </div>
+    `;
+  });
+
+  elements.modalPalette.innerHTML = paletteHtml;
+
+  // Show the modal
+  elements.exportTutorialModal.classList.add('visible');
+}
+
+/**
+ * Hides the export tutorial modal
+ */
+function hideExportTutorial(): void {
+  elements.exportTutorialModal.classList.remove('visible');
 }
 
 /**
@@ -2335,6 +2385,7 @@ async function handleExport(): Promise<void> {
       if (exportMeshResult.baseMesh) exportMeshResult.baseMesh.dispose();
       for (const g of exportMeshResult.colorMeshes.values()) g.dispose();
       showStatus('3MF file downloaded successfully!', 'success');
+      showExportTutorial();
       trackEvent('export', {
         format: '3mf',
         color_count: state.quantizedResult?.palette.length || 0
@@ -3432,6 +3483,10 @@ function setupEventListeners(): void {
 
   // Download button
   elements.downloadBtn.addEventListener('click', handleExport);
+
+  // Export tutorial modal
+  elements.modalCloseBtn.addEventListener('click', hideExportTutorial);
+  elements.modalOkBtn.addEventListener('click', hideExportTutorial);
 
   // ============================================================
   // URL Input Event Listeners

@@ -811,6 +811,22 @@
           </article>
         </section>
       </main>
+
+      <!-- Export Tutorial Modal -->
+      <div class="modal-overlay" id="export-tutorial-modal">
+        <div class="modal-content">
+          <button type="button" class="modal-close" id="modal-close-btn">&times;</button>
+          <h3 class="modal-title">Multi-Color Export Info</h3>
+          <div class="modal-body">
+            <p>Your 3MF file contains <strong>separate objects for each color</strong>. In your slicer, assign filaments to each object for multi-color printing.</p>
+            <p class="modal-note">The objects are exported in the same order as the colors below:</p>
+            <div class="modal-palette" id="modal-palette"></div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="modal-btn" id="modal-ok-btn">Got it</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <script type="module" src="/src/main.ts"></script>

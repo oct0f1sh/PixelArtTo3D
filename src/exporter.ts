@@ -226,7 +226,7 @@ function create3DModelXML(
   if (baseGeometry) {
     const { vertices, triangles } = geometryToMeshXML(baseGeometry);
     if (vertices && triangles) {
-      objects.push(`    <object id="${objectId}" name="${title}_base" pid="1" pindex="0" type="model">
+      objects.push(`    <object id="${objectId}" name="base" pid="1" pindex="0" type="model">
       <mesh>
         <vertices>
 ${vertices}
@@ -250,7 +250,7 @@ ${triangles}
     if (vertices && triangles) {
       const matId = colorIndexToMaterialId.get(colorIndex) || baseMaterialId;
       const pindex = matId - 1; // pindex is 0-based within the basematerials group
-      objects.push(`    <object id="${objectId}" name="${title}_color_${colorIndex + 1}" pid="1" pindex="${pindex}" type="model">
+      objects.push(`    <object id="${objectId}" name="color_${colorIndex + 1}" pid="1" pindex="${pindex}" type="model">
       <mesh>
         <vertices>
 ${vertices}
