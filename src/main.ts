@@ -332,6 +332,9 @@ function saveUndoState(): void {
 
   // Clear redo stack when new action is taken
   redoStack.length = 0;
+
+  // Update button states
+  updateUndoRedoButtons();
 }
 
 /**
@@ -381,6 +384,16 @@ function restoreState(snapshot: UndoableState): void {
 }
 
 /**
+ * Updates the undo/redo button disabled states
+ */
+function updateUndoRedoButtons(): void {
+  const undoBtn = document.getElementById('undo-btn');
+  const redoBtn = document.getElementById('redo-btn');
+  if (undoBtn) undoBtn.toggleAttribute('disabled', undoStack.length === 0);
+  if (redoBtn) redoBtn.toggleAttribute('disabled', redoStack.length === 0);
+}
+
+/**
  * Undoes the last action
  */
 async function undo(): Promise<void> {
@@ -395,6 +408,7 @@ async function undo(): Promise<void> {
 
   // Update UI
   await refreshUIFromState();
+  updateUndoRedoButtons();
 }
 
 /**
@@ -412,6 +426,7 @@ async function redo(): Promise<void> {
 
   // Update UI
   await refreshUIFromState();
+  updateUndoRedoButtons();
 }
 
 /**
@@ -436,9 +451,9 @@ async function refreshUIFromState(): Promise<void> {
   // Update background removal UI
   elements.bgRemoveToggle.checked = state.bgRemoveEnabled;
   if (state.bgRemoveEnabled) {
-    elements.bgRemoveOptions.classList.add('visible');
+    elements.bgRemoveOptions.classList.remove('hidden');
   } else {
-    elements.bgRemoveOptions.classList.remove('visible');
+    elements.bgRemoveOptions.classList.add('hidden');
   }
   elements.bgToleranceSlider.value = String(state.bgTolerance);
   elements.bgToleranceValue.textContent = String(state.bgTolerance);
@@ -476,17 +491,17 @@ async function refreshUIFromState(): Promise<void> {
   // Update keyhole UI
   elements.keyholeToggle.checked = state.keyholeEnabled;
   if (state.keyholeEnabled) {
-    elements.keyholeOptions.classList.add('visible');
+    elements.keyholeOptions.classList.remove('hidden');
   } else {
-    elements.keyholeOptions.classList.remove('visible');
+    elements.keyholeOptions.classList.add('hidden');
   }
 
   // Update magnet UI
   elements.magnetToggle.checked = state.magnetEnabled;
   if (state.magnetEnabled) {
-    elements.magnetOptions.classList.add('visible');
+    elements.magnetOptions.classList.remove('hidden');
   } else {
-    elements.magnetOptions.classList.remove('visible');
+    elements.magnetOptions.classList.add('hidden');
   }
   elements.magnetDiameterSlider.value = String(state.magnetDiameter);
   elements.magnetDiameterValue.value = state.magnetDiameter.toFixed(1);
@@ -498,15 +513,15 @@ async function refreshUIFromState(): Promise<void> {
   elements.depthSliderContainer.classList.toggle('disabled', state.magnetCenterDepth);
 
   // Update unit toggle
-  elements.unitToggle.querySelectorAll('.toggle-option').forEach(opt => {
-    const input = opt.querySelector('input') as HTMLInputElement;
-    opt.classList.toggle('active', input.value === state.unit);
+  document.querySelectorAll('.unit-btn').forEach(btn => {
+    const unit = (btn as HTMLElement).dataset.unit;
+    btn.classList.toggle('active', unit === state.unit);
   });
 
   // Update dimension toggle
-  elements.dimensionToggle.querySelectorAll('.toggle-option').forEach(opt => {
-    const input = opt.querySelector('input') as HTMLInputElement;
-    opt.classList.toggle('active', input.value === state.setDimension);
+  document.querySelectorAll('.dim-toggle').forEach(btn => {
+    const dim = (btn as HTMLElement).dataset.dim;
+    btn.classList.toggle('active', dim === state.setDimension);
   });
 
   // Update previews and 3D model
@@ -545,9 +560,10 @@ const elements = {
 
   // Output preview
   outputPreviewImage: document.getElementById('output-preview-image') as HTMLImageElement,
-  outputDimensions: document.getElementById('output-dimensions') as HTMLSpanElement,
   outputGridToggle: document.getElementById('output-grid-toggle') as HTMLInputElement,
   outputGridOverlay: document.getElementById('output-grid-overlay') as HTMLCanvasElement,
+  outputGridToggleWrap: document.getElementById('output-grid-toggle-wrap') as HTMLLabelElement,
+  outputPreviewWrap: document.getElementById('output-preview-wrap') as HTMLDivElement,
 
   // Background removal
   bgRemoveToggle: document.getElementById('bg-remove-toggle') as HTMLInputElement,
@@ -558,13 +574,11 @@ const elements = {
   bgToleranceValue: document.getElementById('bg-tolerance-value') as HTMLSpanElement,
 
   // Physical dimensions
-  unitToggle: document.getElementById('unit-toggle') as HTMLDivElement,
-  dimensionToggle: document.getElementById('dimension-toggle') as HTMLDivElement,
   dimensionInput: document.getElementById('dimension-input') as HTMLInputElement,
   dimensionInputLabel: document.getElementById('dimension-input-label') as HTMLSpanElement,
   dimensionUnitLabel: document.getElementById('dimension-unit-label') as HTMLSpanElement,
-  outputWidth: document.getElementById('output-width') as HTMLDivElement,
-  outputHeight: document.getElementById('output-height') as HTMLDivElement,
+  outputWidth: document.getElementById('output-width') as HTMLSpanElement,
+  outputHeight: document.getElementById('output-height') as HTMLSpanElement,
 
   // Height settings
   pixelHeightSlider: document.getElementById('pixel-height-slider') as HTMLInputElement,
@@ -626,8 +640,6 @@ const elements = {
   colorReduceIncrement: document.getElementById('color-reduce-increment') as HTMLButtonElement,
 
   // Export
-  formatToggle: document.getElementById('format-toggle') as HTMLDivElement,
-  formatHint: document.getElementById('format-hint') as HTMLParagraphElement,
   filenameInput: document.getElementById('filename-input') as HTMLInputElement,
   fileExtension: document.getElementById('file-extension') as HTMLSpanElement,
   exportStatus: document.getElementById('export-status') as HTMLDivElement,
@@ -862,7 +874,6 @@ function updateOutputPreview(imageData: ImageData): void {
   state.processedImageData = imageData;
   const dataURL = imageDataToDataURL(imageData);
   elements.outputPreviewImage.src = dataURL;
-  elements.outputDimensions.textContent = `${imageData.width} x ${imageData.height} px`;
 }
 
 /**
@@ -1060,7 +1071,7 @@ function updateMagnetBufferInfo(): void {
   elements.bufferTotal.textContent = `${totalHeight.toFixed(1)} mm`;
 
   // Add warning class if insufficient material above
-  const aboveBufferItem = elements.bufferAbove.closest('.buffer-item');
+  const aboveBufferItem = elements.bufferAbove.closest('.info-row');
   if (aboveBufferItem) {
     aboveBufferItem.classList.toggle('warning', aboveMagnet < 0.5);
   }
@@ -1549,7 +1560,7 @@ function enterCropMode(): void {
   state.cropDragHandle = 'none';
 
   elements.cropToggleBtn.classList.add('active');
-  elements.cropControls.classList.add('visible');
+  elements.cropControls.classList.remove('hidden');
   elements.cropOverlay.classList.add('active');
   elements.cropApplyBtn.disabled = true;
 
@@ -1569,7 +1580,7 @@ function exitCropMode(): void {
   state.cropDragHandle = 'none';
 
   elements.cropToggleBtn.classList.remove('active');
-  elements.cropControls.classList.remove('visible');
+  elements.cropControls.classList.add('hidden');
   elements.cropOverlay.classList.remove('active');
 
   // Remove all cursor classes
@@ -1861,11 +1872,11 @@ function updateColorPalette(): void {
 
   const { palette } = state.quantizedResult;
 
-  elements.paletteCount.textContent = `${palette.length} colors`;
+  elements.paletteCount.textContent = String(palette.length);
 
   if (palette.length === 0) {
     elements.colorPalette.innerHTML = `
-      <div class="color-palette-empty">
+      <div class="palette-empty">
         No colors extracted. The image may be fully transparent.
       </div>
     `;
@@ -2430,6 +2441,13 @@ function setupEventListeners(): void {
     }
   });
 
+  // Undo/Redo button event listeners
+  const undoBtn = document.getElementById('undo-btn');
+  const redoBtn = document.getElementById('redo-btn');
+
+  undoBtn?.addEventListener('click', () => undo());
+  redoBtn?.addEventListener('click', () => redo());
+
   // Drop zone events
   elements.dropZone.addEventListener('click', () => elements.fileInput.click());
 
@@ -2483,11 +2501,11 @@ function setupEventListeners(): void {
 
     // Reset palette
     elements.colorPalette.innerHTML = `
-      <div class="color-palette-empty">
+      <div class="palette-empty">
         No colors extracted yet. Upload an image to see the palette.
       </div>
     `;
-    elements.paletteCount.textContent = '0 colors';
+    elements.paletteCount.textContent = '0';
 
     // Reset dimensions
     elements.outputWidth.textContent = '--';
@@ -2515,7 +2533,6 @@ function setupEventListeners(): void {
     elements.outputGridToggle.checked = false;
     elements.outputGridOverlay.classList.remove('visible');
     elements.outputPreviewImage.src = '';
-    elements.outputDimensions.textContent = '-- x -- px';
 
     // Reset zoom and pan
     state.inputZoom = 1;
@@ -2559,6 +2576,36 @@ function setupEventListeners(): void {
     if (state.outputGridVisible) {
       requestAnimationFrame(() => updateOutputGridOverlay());
     }
+  });
+
+  // Preview tabs (Input/Output)
+  document.querySelectorAll('.preview-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      const tabType = (tab as HTMLElement).dataset.tab;
+      if (!tabType) return;
+
+      // Update tab active states
+      document.querySelectorAll('.preview-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+
+      // Show/hide preview content
+      const inputContainer = elements.inputPreviewContainer;
+      const outputWrap = elements.outputPreviewWrap;
+      const inputGridToggle = elements.pixelGridToggle.closest('.mini-toggle');
+      const outputGridToggleWrap = elements.outputGridToggleWrap;
+
+      if (tabType === 'input') {
+        inputContainer?.classList.remove('hidden');
+        outputWrap?.classList.add('hidden');
+        inputGridToggle?.classList.remove('hidden');
+        outputGridToggleWrap?.classList.add('hidden');
+      } else {
+        inputContainer?.classList.add('hidden');
+        outputWrap?.classList.remove('hidden');
+        inputGridToggle?.classList.add('hidden');
+        outputGridToggleWrap?.classList.remove('hidden');
+      }
+    });
   });
 
   // Scroll to zoom on input image (zoom toward center of preview area)
@@ -2698,9 +2745,9 @@ function setupEventListeners(): void {
     }
 
     if (state.bgRemoveEnabled) {
-      elements.bgRemoveOptions.classList.add('visible');
+      elements.bgRemoveOptions.classList.remove('hidden');
     } else {
-      elements.bgRemoveOptions.classList.remove('visible');
+      elements.bgRemoveOptions.classList.add('hidden');
       // Deactivate eyedropper when disabling
       state.eyedropperActive = false;
       elements.eyedropperBtn.classList.remove('active');
@@ -2791,105 +2838,97 @@ function setupEventListeners(): void {
     }
   });
 
-  // Unit toggle
-  elements.unitToggle.addEventListener('click', (e) => {
-    const target = e.target as HTMLElement;
-    const label = target.closest('.toggle-option');
-    if (!label) return;
+  // Unit toggle (mm/inches)
+  document.querySelectorAll('.unit-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const newUnit = (btn as HTMLElement).dataset.unit as 'mm' | 'inches';
+      if (!newUnit || newUnit === state.unit) return;
 
-    const input = label.querySelector('input') as HTMLInputElement;
-    if (!input) return;
+      // Update active state
+      document.querySelectorAll('.unit-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
 
-    // Update active state
-    elements.unitToggle.querySelectorAll('.toggle-option').forEach(opt => {
-      opt.classList.remove('active');
+      const previousUnit = state.unit;
+      state.unit = newUnit;
+      elements.dimensionUnitLabel.textContent = state.unit;
+
+      // Convert all dimension values between units
+      if (previousUnit !== state.unit) {
+        if (state.unit === 'inches') {
+          // Converting from mm to inches
+          state.dimensionValue = state.dimensionValue / MM_PER_INCH;
+          state.pixelHeight = state.pixelHeight / MM_PER_INCH;
+          state.baseHeight = state.baseHeight / MM_PER_INCH;
+        } else {
+          // Converting from inches to mm
+          state.dimensionValue = state.dimensionValue * MM_PER_INCH;
+          state.pixelHeight = state.pixelHeight * MM_PER_INCH;
+          state.baseHeight = state.baseHeight * MM_PER_INCH;
+        }
+        // Round to reasonable precision
+        state.dimensionValue = Math.round(state.dimensionValue * 100) / 100;
+        state.pixelHeight = Math.round(state.pixelHeight * 1000) / 1000;
+        state.baseHeight = Math.round(state.baseHeight * 1000) / 1000;
+
+        // Update UI
+        elements.dimensionInput.value = state.dimensionValue.toString();
+        elements.pixelHeightSlider.value = state.pixelHeight.toString();
+        elements.pixelHeightValue.textContent = state.pixelHeight.toFixed(state.unit === 'inches' ? 2 : 1);
+        elements.baseHeightSlider.value = state.baseHeight.toString();
+        elements.baseHeightValue.textContent = state.baseHeight.toFixed(state.unit === 'inches' ? 2 : 1);
+
+        // Update slider ranges for the new unit
+        if (state.unit === 'inches') {
+          // Convert mm ranges to inches
+          elements.pixelHeightSlider.min = (0.5 / MM_PER_INCH).toFixed(3);
+          elements.pixelHeightSlider.max = (10 / MM_PER_INCH).toFixed(3);
+          elements.pixelHeightSlider.step = '0.01';
+          elements.baseHeightSlider.min = (0.5 / MM_PER_INCH).toFixed(3);
+          elements.baseHeightSlider.max = (5 / MM_PER_INCH).toFixed(3);
+          elements.baseHeightSlider.step = '0.01';
+        } else {
+          // Reset to mm ranges
+          elements.pixelHeightSlider.min = '0.5';
+          elements.pixelHeightSlider.max = '10';
+          elements.pixelHeightSlider.step = '0.1';
+          elements.baseHeightSlider.min = '0.5';
+          elements.baseHeightSlider.max = '5';
+          elements.baseHeightSlider.step = '0.1';
+        }
+      }
+
+      updateDimensionsDisplay();
+
+      // Update grid to match unit
+      if (state.previewController) {
+        state.previewController.setUnit(state.unit);
+      }
+
+      if (state.quantizedResult) {
+        generateAndDisplay3D();
+      }
     });
-    label.classList.add('active');
-
-    const previousUnit = state.unit;
-    state.unit = input.value as 'mm' | 'inches';
-    elements.dimensionUnitLabel.textContent = state.unit;
-
-    // Convert all dimension values between units
-    if (previousUnit !== state.unit) {
-      if (state.unit === 'inches') {
-        // Converting from mm to inches
-        state.dimensionValue = state.dimensionValue / MM_PER_INCH;
-        state.pixelHeight = state.pixelHeight / MM_PER_INCH;
-        state.baseHeight = state.baseHeight / MM_PER_INCH;
-      } else {
-        // Converting from inches to mm
-        state.dimensionValue = state.dimensionValue * MM_PER_INCH;
-        state.pixelHeight = state.pixelHeight * MM_PER_INCH;
-        state.baseHeight = state.baseHeight * MM_PER_INCH;
-      }
-      // Round to reasonable precision
-      state.dimensionValue = Math.round(state.dimensionValue * 100) / 100;
-      state.pixelHeight = Math.round(state.pixelHeight * 1000) / 1000;
-      state.baseHeight = Math.round(state.baseHeight * 1000) / 1000;
-
-      // Update UI
-      elements.dimensionInput.value = state.dimensionValue.toString();
-      elements.pixelHeightSlider.value = state.pixelHeight.toString();
-      elements.pixelHeightValue.textContent = state.pixelHeight.toFixed(state.unit === 'inches' ? 2 : 1);
-      elements.baseHeightSlider.value = state.baseHeight.toString();
-      elements.baseHeightValue.textContent = state.baseHeight.toFixed(state.unit === 'inches' ? 2 : 1);
-
-      // Update slider ranges for the new unit
-      if (state.unit === 'inches') {
-        // Convert mm ranges to inches
-        elements.pixelHeightSlider.min = (0.5 / MM_PER_INCH).toFixed(3);
-        elements.pixelHeightSlider.max = (10 / MM_PER_INCH).toFixed(3);
-        elements.pixelHeightSlider.step = '0.01';
-        elements.baseHeightSlider.min = (0.5 / MM_PER_INCH).toFixed(3);
-        elements.baseHeightSlider.max = (5 / MM_PER_INCH).toFixed(3);
-        elements.baseHeightSlider.step = '0.01';
-      } else {
-        // Reset to mm ranges
-        elements.pixelHeightSlider.min = '0.5';
-        elements.pixelHeightSlider.max = '10';
-        elements.pixelHeightSlider.step = '0.1';
-        elements.baseHeightSlider.min = '0.5';
-        elements.baseHeightSlider.max = '5';
-        elements.baseHeightSlider.step = '0.1';
-      }
-    }
-
-    updateDimensionsDisplay();
-
-    // Update grid to match unit
-    if (state.previewController) {
-      state.previewController.setUnit(state.unit);
-    }
-
-    if (state.quantizedResult) {
-      generateAndDisplay3D();
-    }
   });
 
   // Dimension toggle (width/height)
-  elements.dimensionToggle.addEventListener('click', (e) => {
-    const target = e.target as HTMLElement;
-    const label = target.closest('.toggle-option');
-    if (!label) return;
+  document.querySelectorAll('.dim-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const newDim = (btn as HTMLElement).dataset.dim as 'width' | 'height';
+      if (!newDim || newDim === state.setDimension) return;
 
-    const input = label.querySelector('input') as HTMLInputElement;
-    if (!input) return;
+      // Update active state
+      document.querySelectorAll('.dim-toggle').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
 
-    // Update active state
-    elements.dimensionToggle.querySelectorAll('.toggle-option').forEach(opt => {
-      opt.classList.remove('active');
+      state.setDimension = newDim;
+      elements.dimensionInputLabel.textContent = state.setDimension === 'width' ? 'Width' : 'Height';
+
+      updateDimensionsDisplay();
+
+      if (state.quantizedResult) {
+        generateAndDisplay3D();
+      }
     });
-    label.classList.add('active');
-
-    state.setDimension = input.value as 'width' | 'height';
-    elements.dimensionInputLabel.textContent = state.setDimension === 'width' ? 'Width' : 'Height';
-
-    updateDimensionsDisplay();
-
-    if (state.quantizedResult) {
-      generateAndDisplay3D();
-    }
   });
 
   // Dimension input
@@ -2965,7 +3004,7 @@ function setupEventListeners(): void {
     trackEvent('feature_toggle', { feature: 'keyhole', enabled: state.keyholeEnabled });
 
     if (state.keyholeEnabled) {
-      elements.keyholeOptions.classList.add('visible');
+      elements.keyholeOptions.classList.remove('hidden');
       // Enable keyhole placement mode on the preview
       if (state.previewController) {
         state.previewController.enableKeyholePlacement(
@@ -2991,7 +3030,7 @@ function setupEventListeners(): void {
         );
       }
     } else {
-      elements.keyholeOptions.classList.remove('visible');
+      elements.keyholeOptions.classList.add('hidden');
       if (state.keyholePosition) {
         saveUndoState();
       }
@@ -3021,11 +3060,13 @@ function setupEventListeners(): void {
   }
 
   // Keyhole type toggle
-  elements.keyholeTypeToggle.addEventListener('change', (e) => {
-    const target = e.target as HTMLInputElement;
-    if (target.type === 'radio' && target.checked) {
+  document.querySelectorAll('#keyhole-type-toggle .seg-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const newType = (btn as HTMLElement).dataset.type as 'holepunch' | 'floating';
+      if (!newType || newType === state.keyholeType) return;
+
       saveUndoState();
-      state.keyholeType = target.value as 'holepunch' | 'floating';
+      state.keyholeType = newType;
 
       // Toggle settings visibility
       if (state.keyholeType === 'holepunch') {
@@ -3037,9 +3078,8 @@ function setupEventListeners(): void {
       }
 
       // Update toggle button active states
-      elements.keyholeTypeToggle.querySelectorAll('.toggle-option').forEach(opt => {
-        const input = opt.querySelector('input') as HTMLInputElement;
-        opt.classList.toggle('active', input.checked);
+      document.querySelectorAll('#keyhole-type-toggle .seg-btn').forEach(b => {
+        b.classList.toggle('active', (b as HTMLElement).dataset.type === state.keyholeType);
       });
 
       // Update preview indicator
@@ -3048,7 +3088,7 @@ function setupEventListeners(): void {
       if (state.quantizedResult && state.keyholeEnabled && state.keyholePosition) {
         generateAndDisplay3D();
       }
-    }
+    });
   });
 
   // Hole diameter slider (holepunch)
@@ -3117,7 +3157,7 @@ function setupEventListeners(): void {
     trackEvent('feature_toggle', { feature: 'magnet_compartment', enabled: state.magnetEnabled });
 
     if (state.magnetEnabled) {
-      elements.magnetOptions.classList.add('visible');
+      elements.magnetOptions.classList.remove('hidden');
       updateMagnetBufferInfo();
       updateMagnetCount();
 
@@ -3149,7 +3189,7 @@ function setupEventListeners(): void {
         );
       }
     } else {
-      elements.magnetOptions.classList.remove('visible');
+      elements.magnetOptions.classList.add('hidden');
 
       // Disable magnet placement mode
       if (state.previewController) {
@@ -3163,11 +3203,13 @@ function setupEventListeners(): void {
   });
 
   // Magnet preset toggle
-  elements.magnetPresetToggle.addEventListener('change', (e) => {
-    const target = e.target as HTMLInputElement;
-    if (target.type === 'radio' && target.checked) {
+  document.querySelectorAll('#magnet-preset-toggle .seg-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const newPreset = (btn as HTMLElement).dataset.preset as 'small' | 'medium' | 'large' | 'custom';
+      if (!newPreset || newPreset === state.magnetPreset) return;
+
       saveUndoState();
-      state.magnetPreset = target.value as 'small' | 'medium' | 'large' | 'custom';
+      state.magnetPreset = newPreset;
 
       // Toggle custom settings visibility
       if (state.magnetPreset === 'custom') {
@@ -3185,9 +3227,8 @@ function setupEventListeners(): void {
       }
 
       // Update toggle button active states
-      elements.magnetPresetToggle.querySelectorAll('.toggle-option').forEach(opt => {
-        const input = opt.querySelector('input') as HTMLInputElement;
-        opt.classList.toggle('active', input.checked);
+      document.querySelectorAll('#magnet-preset-toggle .seg-btn').forEach(b => {
+        b.classList.toggle('active', (b as HTMLElement).dataset.preset === state.magnetPreset);
       });
 
       updateMagnetBufferInfo();
@@ -3196,7 +3237,7 @@ function setupEventListeners(): void {
       if (state.quantizedResult && state.magnetEnabled && state.magnetPositions.length > 0) {
         generateAndDisplay3D();
       }
-    }
+    });
   });
 
   // Magnet diameter slider (custom mode)
@@ -3358,9 +3399,9 @@ function setupEventListeners(): void {
     trackEvent('feature_toggle', { feature: 'color_reduction', enabled: state.colorReduceEnabled });
 
     if (state.colorReduceEnabled) {
-      elements.colorReduceOptions.classList.add('visible');
+      elements.colorReduceOptions.classList.remove('hidden');
     } else {
-      elements.colorReduceOptions.classList.remove('visible');
+      elements.colorReduceOptions.classList.add('hidden');
     }
 
     if (state.originalImageData) {
@@ -3451,29 +3492,18 @@ function setupEventListeners(): void {
   });
 
   // Export format toggle
-  elements.formatToggle.addEventListener('click', (e) => {
-    const target = e.target as HTMLElement;
-    const label = target.closest('.toggle-option');
-    if (!label) return;
+  document.querySelectorAll('.format-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const newFormat = (btn as HTMLElement).dataset.format as 'stl' | '3mf';
+      if (!newFormat || newFormat === state.exportFormat) return;
 
-    const input = label.querySelector('input') as HTMLInputElement;
-    if (!input) return;
+      // Update active state
+      document.querySelectorAll('.format-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
 
-    // Update active state
-    elements.formatToggle.querySelectorAll('.toggle-option').forEach(opt => {
-      opt.classList.remove('active');
+      state.exportFormat = newFormat;
+      elements.fileExtension.textContent = `.${state.exportFormat}`;
     });
-    label.classList.add('active');
-
-    state.exportFormat = input.value as 'stl' | '3mf';
-    elements.fileExtension.textContent = `.${state.exportFormat}`;
-
-    // Update hint
-    if (state.exportFormat === 'stl') {
-      elements.formatHint.textContent = 'Single color mesh, widely compatible';
-    } else {
-      elements.formatHint.textContent = 'Multi-color with separate objects per color';
-    }
   });
 
   // Filename input
@@ -3793,7 +3823,7 @@ function setupCollapsiblePanels(): void {
   const savedStates = loadPanelStates();
 
   // Setup click handlers for all collapsible headers
-  document.querySelectorAll('.panel-header[data-collapse]').forEach(header => {
+  document.querySelectorAll('.ctrl-header[data-collapse]').forEach(header => {
     const contentId = (header as HTMLElement).dataset.collapse;
     if (!contentId) return;
 

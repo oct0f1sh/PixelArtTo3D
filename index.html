@@ -36,7 +36,7 @@
     <meta name="twitter:image" content="https://oct0f1sh.github.io/PixelArtTo3D/favicon.svg">
 
     <!-- Mobile/Theme -->
-    <meta name="theme-color" content="#1a1a2e">
+    <meta name="theme-color" content="#0a0a0a">
     <meta name="apple-mobile-web-app-title" content="PixelArt3D">
 
     <!-- Structured Data -->
@@ -52,18 +52,6 @@
       "operatingSystem": "Any",
       "browserRequirements": "Requires JavaScript and WebGL",
       "permissions": "none",
-      "keywords": [
-        "pixel art to 3d model",
-        "3d print pixel art",
-        "convert pixel art to stl",
-        "pixel art keychain maker",
-        "free stl generator from image",
-        "sprite to 3d model converter",
-        "perler bead pattern to 3d",
-        "8-bit art to stl",
-        "pixel art magnet maker",
-        "retro game sprite 3d print"
-      ],
       "offers": {
         "@type": "Offer",
         "price": "0",
@@ -74,57 +62,8 @@
         "No image uploads — your files never leave your device",
         "Convert pixel art to 3D models",
         "Export to STL format",
-        "Export to 3MF format with colors",
-        "Automatic background removal",
-        "Color palette reduction",
-        "Keyhole option for keychains",
-        "Magnet compartment option",
-        "No signup required",
-        "Works offline after loading"
-      ],
-      "screenshot": "https://oct0f1sh.github.io/PixelArtTo3D/favicon.svg",
-      "softwareVersion": "1.0"
-    }
-    </script>
-    <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "HowTo",
-      "name": "How to Convert Pixel Art to a 3D Printable Model",
-      "description": "Convert your pixel art, sprites, or perler bead patterns into 3D printable STL or 3MF files for keychains, magnets, and decorations.",
-      "step": [
-        {
-          "@type": "HowToStep",
-          "position": 1,
-          "name": "Upload Your Image",
-          "text": "Drag and drop your pixel art image or paste a URL. Supports PNG, JPG, and WebP formats."
-        },
-        {
-          "@type": "HowToStep",
-          "position": 2,
-          "name": "Remove Background",
-          "text": "Optionally remove the background color using the eyedropper tool and tolerance slider."
-        },
-        {
-          "@type": "HowToStep",
-          "position": 3,
-          "name": "Adjust Settings",
-          "text": "Set physical dimensions, pixel height, and optionally add a keyhole for keychains or magnet compartment."
-        },
-        {
-          "@type": "HowToStep",
-          "position": 4,
-          "name": "Export Your Model",
-          "text": "Download your 3D model as STL (single color) or 3MF (multi-color) format for 3D printing."
-        }
-      ],
-      "tool": [
-        {
-          "@type": "HowToTool",
-          "name": "Web browser with WebGL support"
-        }
-      ],
-      "totalTime": "PT2M"
+        "Export to 3MF format with colors"
+      ]
     }
     </script>
 
@@ -133,700 +72,476 @@
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <div class="app-container">
-      <header class="app-header">
-        <h1>Pixel Art to 3D Model Converter</h1>
-        <p>Transform your pixel art into <strong>3D printable keychains</strong>, magnets, and retro gaming decorations. Export to <strong>STL</strong> or <strong>3MF</strong> format — free, no signup, and <strong>100% in-browser</strong>. Your images never leave your device.</p>
-      </header>
+    <!-- ============================================
+         MAIN APP SHELL
+         ============================================ -->
+    <div class="app" id="app">
 
-      <main class="main-layout">
-        <!-- Left Column: Input and Settings -->
-        <section class="column column-left">
-          <!-- Image Upload Panel - Always Expanded -->
-          <article class="panel" id="upload-panel">
-            <header class="panel-header" data-collapse="upload-content">
-              <h2>Image Input</h2>
-              <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="6 9 12 15 18 9"></polyline>
-              </svg>
-            </header>
+      <!-- ==========================================
+           TOOLBAR - Top Navigation
+           ========================================== -->
+      <nav class="toolbar">
+        <div class="toolbar-brand">
+          <span class="brand-icon">◇</span>
+          <span class="brand-text">PIXEL ART TO 3D</span>
+        </div>
 
-            <div class="panel-content" id="upload-content">
-              <div class="drop-zone" id="drop-zone">
-                <div class="drop-zone-icon">📁</div>
-                <p class="drop-zone-text">
-                  <strong>Drop your pixel art here</strong> or click to browse
-                </p>
-                <p class="drop-zone-hint">Supports PNG, JPG, WebP</p>
-                <input
-                  type="file"
-                  id="file-input"
-                  class="drop-zone-input"
-                  accept="image/png,image/jpeg,image/webp"
-                />
-                <div class="url-input-section">
-                  <div class="url-input-divider">
-                    <span>or paste URL</span>
-                  </div>
-                  <div class="url-input-row">
-                    <input type="text" id="url-input" placeholder="https://example.com/image.png" />
-                    <button type="button" id="url-load-btn">Load</button>
-                  </div>
-                  <div id="url-status" class="url-status"></div>
-                </div>
+        <div class="toolbar-actions">
+          <button type="button" class="tool-btn" id="undo-btn" title="Undo (Cmd+Z)" disabled>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 10h10a5 5 0 0 1 5 5v2M3 10l4-4M3 10l4 4"/>
+            </svg>
+          </button>
+          <button type="button" class="tool-btn" id="redo-btn" title="Redo (Shift+Cmd+Z)" disabled>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 10H11a5 5 0 0 0-5 5v2M21 10l-4-4M21 10l-4 4"/>
+            </svg>
+          </button>
+          <div class="toolbar-divider"></div>
+          <button type="button" class="tool-btn" id="reset-view-btn" title="Reset 3D View">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 12a9 9 0 1 1-9-9"/>
+              <path d="M21 3v6h-6"/>
+            </svg>
+          </button>
+        </div>
+      </nav>
+
+      <!-- ==========================================
+           MAIN WORKSPACE
+           ========================================== -->
+      <main class="workspace">
+
+        <!-- LEFT: Source Panel -->
+        <section class="source-panel">
+
+          <!-- Drop Zone (shown when no image) -->
+          <div class="drop-zone" id="drop-zone">
+            <input type="file" id="file-input" class="drop-zone-input" accept="image/png,image/jpeg,image/webp" />
+            <div class="drop-zone-content">
+              <div class="drop-icon">
+                <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <rect x="6" y="6" width="36" height="36" rx="4"/>
+                  <circle cx="16" cy="16" r="3"/>
+                  <path d="M42 30L32 20L18 34"/>
+                  <path d="M28 38L14 24L6 32"/>
+                </svg>
               </div>
+              <h2 class="drop-title">Drop your pixel art</h2>
+              <p class="drop-subtitle">or click to browse</p>
+              <div class="drop-formats">PNG, JPG, WebP</div>
+            </div>
 
-              <div class="image-preview" id="image-preview">
-                <div class="image-previews-row">
-                  <!-- Input Image Preview -->
-                  <div class="image-preview-panel">
-                    <div class="image-preview-label">Input</div>
-                    <div class="image-preview-container" id="input-preview-container">
-                      <img id="preview-image" src="" alt="Uploaded pixel art preview" />
-                      <canvas id="pixel-grid-overlay" class="pixel-grid-overlay"></canvas>
-                      <canvas id="crop-overlay" class="crop-overlay"></canvas>
-                    </div>
-                    <div class="image-info">
-                      <span id="image-dimensions">-- x -- px</span>
-                    </div>
-                    <div class="image-preview-controls">
-                      <label class="toggle-label">
-                        <input type="checkbox" id="pixel-grid-toggle" />
-                        <span>Show grid</span>
-                      </label>
-                      <button type="button" class="crop-toggle-btn" id="crop-toggle-btn">Crop</button>
-                    </div>
-                    <div class="crop-controls" id="crop-controls">
-                      <button type="button" class="crop-btn crop-cancel-btn" id="crop-cancel-btn">Cancel</button>
-                      <button type="button" class="crop-btn crop-apply-btn" id="crop-apply-btn">Apply Crop</button>
-                    </div>
-                  </div>
+            <div class="url-loader">
+              <span class="url-label">URL</span>
+              <input type="text" id="url-input" placeholder="https://..." />
+              <button type="button" id="url-load-btn">Load</button>
+            </div>
+            <div id="url-status" class="url-status"></div>
+          </div>
 
-                  <!-- Output Image Preview -->
-                  <div class="image-preview-panel">
-                    <div class="image-preview-label">Output</div>
-                    <div class="image-preview-container">
-                      <img id="output-preview-image" src="" alt="Processed pixel art preview" />
-                      <canvas id="output-grid-overlay" class="pixel-grid-overlay"></canvas>
-                    </div>
-                    <div class="image-info">
-                      <span id="output-dimensions">-- x -- px</span>
-                    </div>
-                    <div class="image-preview-controls">
-                      <label class="toggle-label">
-                        <input type="checkbox" id="output-grid-toggle" />
-                        <span>Show grid</span>
-                      </label>
-                    </div>
-                  </div>
+          <!-- Image Preview (shown when image loaded) -->
+          <div class="source-preview" id="image-preview">
+            <div class="preview-header">
+              <div class="preview-tabs">
+                <button type="button" class="preview-tab active" data-tab="input">Input</button>
+                <button type="button" class="preview-tab" data-tab="output">Output</button>
+              </div>
+              <div class="preview-info">
+                <span id="image-dimensions">-- × --</span>
+              </div>
+            </div>
+
+            <div class="preview-viewport">
+              <div class="preview-canvas-wrap" id="input-preview-container">
+                <img id="preview-image" src="" alt="Source" />
+                <canvas id="pixel-grid-overlay" class="pixel-grid-overlay"></canvas>
+                <canvas id="crop-overlay" class="crop-overlay"></canvas>
+              </div>
+              <div class="preview-canvas-wrap hidden" id="output-preview-wrap">
+                <img id="output-preview-image" src="" alt="Output" />
+                <canvas id="output-grid-overlay" class="pixel-grid-overlay"></canvas>
+              </div>
+            </div>
+
+            <div class="preview-toolbar">
+              <label class="mini-toggle">
+                <input type="checkbox" id="pixel-grid-toggle" />
+                <span>Grid</span>
+              </label>
+              <label class="mini-toggle hidden" id="output-grid-toggle-wrap">
+                <input type="checkbox" id="output-grid-toggle" />
+                <span>Grid</span>
+              </label>
+              <button type="button" class="mini-btn" id="crop-toggle-btn">Crop</button>
+              <div class="crop-actions hidden" id="crop-controls">
+                <button type="button" class="mini-btn" id="crop-cancel-btn">Cancel</button>
+                <button type="button" class="mini-btn primary" id="crop-apply-btn">Apply</button>
+              </div>
+              <div class="spacer"></div>
+              <button type="button" class="mini-btn danger" id="clear-image-btn">Clear</button>
+            </div>
+
+            <div class="source-filename">
+              <span id="image-filename">--</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- CENTER: 3D Preview -->
+        <section class="preview-panel">
+          <div class="canvas-container" id="preview-container">
+            <canvas id="preview-canvas"></canvas>
+            <div class="canvas-empty" id="canvas-placeholder">
+              <div class="empty-cube">
+                <div class="cube-face front"></div>
+                <div class="cube-face back"></div>
+                <div class="cube-face left"></div>
+                <div class="cube-face right"></div>
+                <div class="cube-face top"></div>
+                <div class="cube-face bottom"></div>
+              </div>
+              <p>Upload an image to preview</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- RIGHT: Controls Panel -->
+        <aside class="controls-panel">
+
+          <!-- Section: Background -->
+          <div class="ctrl-section" id="background-panel">
+            <button type="button" class="ctrl-header" data-collapse="bg-content">
+              <span class="ctrl-title">Background</span>
+              <span class="ctrl-toggle">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="6 9 12 15 18 9"/>
+                </svg>
+              </span>
+            </button>
+            <div class="ctrl-body" id="bg-content">
+              <label class="switch-row">
+                <span>Remove background</span>
+                <input type="checkbox" id="bg-remove-toggle" class="switch" />
+              </label>
+              <div class="color-pick-row" id="bg-remove-options">
+                <div class="color-preview" id="bg-color-preview">
+                  <span class="color-hint">Pick</span>
                 </div>
-
-                <div class="image-info">
-                  <span id="image-filename">--</span>
-                </div>
-                <button type="button" class="canvas-control-btn" id="clear-image-btn">
-                  Clear Image
+                <button type="button" class="icon-btn" id="eyedropper-btn" title="Eyedropper">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M2 22l1-1h3l9-9M3 21v-3l9-9M14.5 5.5l4 4M18.5 9.5l-4-4 1.5-1.5a2.83 2.83 0 114 4L18.5 9.5z"/>
+                  </svg>
                 </button>
-              </div>
-            </div>
-          </article>
-
-          <!-- Background Removal Panel -->
-          <article class="panel" id="background-panel">
-            <header class="panel-header" data-collapse="bg-content">
-              <h2>Background Removal</h2>
-              <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="6 9 12 15 18 9"></polyline>
-              </svg>
-            </header>
-
-            <div class="panel-content" id="bg-content">
-              <div class="control-group">
-                <div class="bg-remove-row">
-                  <label class="checkbox-group">
-                    <input
-                      type="checkbox"
-                      id="bg-remove-toggle"
-                      class="checkbox-input"
-                    />
-                    <span class="checkbox-label">Remove background color</span>
-                  </label>
-                  <div class="bg-color-inline">
-                    <div class="bg-color-preview" id="bg-color-preview">
-                      <span class="bg-color-hint">Pick color</span>
-                    </div>
-                    <button type="button" class="eyedropper-btn" id="eyedropper-btn" title="Pick color from image">
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M2 22l1-1h3l9-9"/>
-                        <path d="M3 21v-3l9-9"/>
-                        <path d="M14.5 5.5l4 4"/>
-                        <path d="M18.5 9.5l-4-4 1.5-1.5a2.83 2.83 0 114 4L18.5 9.5z"/>
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div class="bg-remove-options" id="bg-remove-options">
-                <div class="control-group">
-                  <label class="control-label" for="bg-tolerance-slider">
-                    Color Tolerance
-                  </label>
-                  <div class="range-container">
-                    <input
-                      type="range"
-                      id="bg-tolerance-slider"
-                      class="range-slider"
-                      min="0"
-                      max="50"
-                      value="10"
-                      step="1"
-                    />
-                    <span class="range-value" id="bg-tolerance-value">10</span>
-                  </div>
-                  <p class="control-hint">
-                    Higher values remove more similar colors
-                  </p>
+                <div class="slider-compact">
+                  <input type="range" id="bg-tolerance-slider" min="0" max="50" value="10" />
+                  <span class="slider-val" id="bg-tolerance-value">10</span>
                 </div>
               </div>
             </div>
-          </article>
+          </div>
 
-          <!-- Physical Dimensions Panel -->
-          <article class="panel" id="dimensions-panel">
-            <header class="panel-header" data-collapse="dimensions-content">
-              <h2>Physical Dimensions</h2>
-              <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="6 9 12 15 18 9"></polyline>
-              </svg>
-            </header>
-
-            <div class="panel-content" id="dimensions-content">
-              <div class="control-group">
-                <label class="control-label">Unit</label>
-                <div class="toggle-group" id="unit-toggle">
-                  <label class="toggle-option active">
-                    <input type="radio" name="unit" value="mm" checked />
-                    mm
+          <!-- Section: Dimensions -->
+          <div class="ctrl-section" id="dimensions-panel">
+            <button type="button" class="ctrl-header" data-collapse="dimensions-content">
+              <span class="ctrl-title">Dimensions</span>
+              <span class="ctrl-toggle">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="6 9 12 15 18 9"/>
+                </svg>
+              </span>
+            </button>
+            <div class="ctrl-body" id="dimensions-content">
+              <div class="unit-row">
+                <button type="button" class="unit-btn active" data-unit="mm">mm</button>
+                <button type="button" class="unit-btn" data-unit="inches">in</button>
+              </div>
+              <div class="dim-input-row">
+                <div class="dim-field">
+                  <label>
+                    <input type="radio" name="set-dimension" value="width" checked hidden />
+                    <span class="dim-label active" id="dimension-input-label">Width</span>
                   </label>
-                  <label class="toggle-option">
-                    <input type="radio" name="unit" value="inches" />
-                    inches
-                  </label>
+                  <input type="number" id="dimension-input" min="5" max="200" value="30" step="0.1" />
+                  <span class="dim-unit" id="dimension-unit-label">mm</span>
                 </div>
               </div>
-
-              <div class="control-group">
-                <label class="control-label">Set Dimension</label>
-                <div class="toggle-group" id="dimension-toggle">
-                  <label class="toggle-option active">
-                    <input type="radio" name="set-dimension" value="width" checked />
-                    Width
-                  </label>
-                  <label class="toggle-option">
-                    <input type="radio" name="set-dimension" value="height" />
-                    Height
-                  </label>
+              <div class="dim-output">
+                <div class="dim-out-item">
+                  <span class="dim-out-val" id="output-width">30.0</span>
+                  <span class="dim-out-label">W</span>
                 </div>
+                <span class="dim-out-x">×</span>
+                <div class="dim-out-item">
+                  <span class="dim-out-val" id="output-height">--</span>
+                  <span class="dim-out-label">H</span>
+                </div>
+                <span class="dim-out-unit output-unit">mm</span>
               </div>
-
-              <div class="control-group">
-                <label class="control-label" for="dimension-input">
-                  <span id="dimension-input-label">Width</span>
-                  (<span id="dimension-unit-label">mm</span>)
-                </label>
-                <input
-                  type="number"
-                  id="dimension-input"
-                  min="5"
-                  max="200"
-                  value="30"
-                  step="0.1"
-                />
-              </div>
-
-              <div class="dimension-display" id="output-dimensions">
-                <div class="dimension">
-                  <div class="dimension-value" id="output-width">30.0</div>
-                  <div class="dimension-label">Width (<span class="output-unit">mm</span>)</div>
-                </div>
-                <div class="dimension-separator">×</div>
-                <div class="dimension">
-                  <div class="dimension-value" id="output-height">--</div>
-                  <div class="dimension-label">Height (<span class="output-unit">mm</span>)</div>
-                </div>
+              <div class="dim-toggle-row">
+                <button type="button" class="dim-toggle active" data-dim="width">Set Width</button>
+                <button type="button" class="dim-toggle" data-dim="height">Set Height</button>
               </div>
             </div>
-          </article>
+          </div>
 
-          <!-- Height Settings Panel -->
-          <article class="panel" id="height-panel">
-            <header class="panel-header" data-collapse="height-content">
-              <h2>3D Height Settings</h2>
-              <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="6 9 12 15 18 9"></polyline>
-              </svg>
-            </header>
-
-            <div class="panel-content" id="height-content">
-              <div class="control-group">
-                <label class="control-label" for="pixel-height-slider">
-                  Pixel Height (<span class="height-unit">mm</span>)
-                </label>
-                <div class="range-container">
-                  <input
-                    type="range"
-                    id="pixel-height-slider"
-                    class="range-slider"
-                    min="0.5"
-                    max="10"
-                    value="1"
-                    step="0.1"
-                  />
-                  <span class="range-value" id="pixel-height-value">1.0</span>
-                </div>
-                <p class="control-hint">
-                  Height of raised pixels (0.5-10)
-                </p>
+          <!-- Section: Height -->
+          <div class="ctrl-section" id="height-panel">
+            <button type="button" class="ctrl-header" data-collapse="height-content">
+              <span class="ctrl-title">3D Height</span>
+              <span class="ctrl-toggle">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="6 9 12 15 18 9"/>
+                </svg>
+              </span>
+            </button>
+            <div class="ctrl-body" id="height-content">
+              <div class="slider-row">
+                <label class="slider-label">Pixel Height</label>
+                <input type="range" id="pixel-height-slider" class="slider" min="0.5" max="10" value="1" step="0.1" />
+                <span class="slider-val" id="pixel-height-value">1.0</span>
+                <span class="slider-unit height-unit">mm</span>
               </div>
-
-              <div class="control-group">
-                <label class="checkbox-group">
-                  <input
-                    type="checkbox"
-                    id="base-toggle"
-                    class="checkbox-input"
-                    checked
-                  />
-                  <span class="checkbox-label">Include base layer</span>
-                </label>
-              </div>
-
+              <label class="switch-row">
+                <span>Base layer</span>
+                <input type="checkbox" id="base-toggle" class="switch" checked />
+              </label>
               <div class="base-options" id="base-options">
-                <div class="control-group">
-                  <label class="control-label" for="base-height-slider">
-                    Base Height (<span class="height-unit">mm</span>)
-                  </label>
-                  <div class="range-container">
-                    <input
-                      type="range"
-                      id="base-height-slider"
-                      class="range-slider"
-                      min="0.5"
-                      max="5"
-                      value="2"
-                      step="0.1"
-                    />
-                    <span class="range-value" id="base-height-value">2.0</span>
-                  </div>
-                  <p class="control-hint">
-                    Thickness of the base layer (0.5-5)
-                  </p>
+                <div class="slider-row">
+                  <label class="slider-label">Base Height</label>
+                  <input type="range" id="base-height-slider" class="slider" min="0.5" max="5" value="2" step="0.1" />
+                  <span class="slider-val" id="base-height-value">2.0</span>
+                  <span class="slider-unit height-unit">mm</span>
                 </div>
-
-                <div class="control-group">
-                  <label class="control-label" for="base-color-input">
-                    Base Color
-                  </label>
-                  <div class="color-input-container">
-                    <input
-                      type="color"
-                      id="base-color-input"
-                      value="#000000"
-                    />
-                    <span class="color-value" id="base-color-value">#000000</span>
-                  </div>
-                  <p class="control-hint">
-                    Color of the base layer
-                  </p>
+                <div class="color-row">
+                  <label class="slider-label">Base Color</label>
+                  <input type="color" id="base-color-input" value="#000000" />
+                  <span class="color-hex" id="base-color-value">#000000</span>
                 </div>
               </div>
             </div>
-          </article>
-        </section>
+          </div>
 
-        <!-- Right Column: Preview and Export -->
-        <section class="column column-right">
-          <!-- 3D Preview Panel - Always Expanded -->
-          <article class="panel" id="preview-panel">
-            <header class="panel-header" data-collapse="preview-content">
-              <h2>3D Preview</h2>
-              <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="6 9 12 15 18 9"></polyline>
-              </svg>
-            </header>
-
-            <div class="panel-content" id="preview-content">
-              <div class="preview-canvas-container" id="preview-container">
-                <canvas id="preview-canvas"></canvas>
-                <div class="canvas-placeholder" id="canvas-placeholder">
-                  <div class="canvas-placeholder-icon">🎲</div>
-                  <p>Upload an image to see 3D preview</p>
+          <!-- Section: Keyhole -->
+          <div class="ctrl-section" id="keyhole-panel">
+            <button type="button" class="ctrl-header" data-collapse="keyhole-content">
+              <span class="ctrl-title">Keyhole</span>
+              <span class="ctrl-toggle">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="6 9 12 15 18 9"/>
+                </svg>
+              </span>
+            </button>
+            <div class="ctrl-body collapsed" id="keyhole-content">
+              <label class="switch-row">
+                <span>Enable keyhole</span>
+                <input type="checkbox" id="keyhole-toggle" class="switch" />
+              </label>
+              <div class="keyhole-options hidden" id="keyhole-options">
+                <div class="seg-control" id="keyhole-type-toggle">
+                  <button type="button" class="seg-btn active" data-type="holepunch">
+                    <input type="radio" name="keyhole-type" value="holepunch" checked hidden />
+                    Punch
+                  </button>
+                  <button type="button" class="seg-btn" data-type="floating">
+                    <input type="radio" name="keyhole-type" value="floating" hidden />
+                    Float
+                  </button>
                 </div>
-              </div>
-
-              <div class="canvas-controls">
-                <button type="button" class="canvas-control-btn" id="reset-view-btn">
-                  Reset View
-                </button>
-              </div>
-
-              <!-- Keyhole Options -->
-              <div class="keyhole-section">
-                <div class="keyhole-header">
-                  <label class="checkbox-group">
-                    <input
-                      type="checkbox"
-                      id="keyhole-toggle"
-                      class="checkbox-input"
-                    />
-                    <span class="checkbox-label">Add Keyhole</span>
-                  </label>
-                </div>
-
-                <div class="keyhole-options" id="keyhole-options">
-                  <!-- Keyhole Type Selector -->
-                  <div class="control-group">
-                    <div class="toggle-group compact" id="keyhole-type-toggle">
-                      <label class="toggle-option active">
-                        <input type="radio" name="keyhole-type" value="holepunch" checked />
-                        <span>Holepunch</span>
-                      </label>
-                      <label class="toggle-option">
-                        <input type="radio" name="keyhole-type" value="floating" />
-                        <span>Floating</span>
-                      </label>
-                    </div>
-                  </div>
-
-                  <!-- Holepunch Settings -->
-                  <div class="keyhole-type-settings" id="holepunch-settings">
-                    <div class="control-group compact">
-                      <label class="control-label" for="hole-diameter-slider">Diameter</label>
-                      <div class="range-container">
-                        <input
-                          type="range"
-                          id="hole-diameter-slider"
-                          min="2"
-                          max="8"
-                          step="0.5"
-                          value="4"
-                        />
-                        <span class="range-value" id="hole-diameter-value">4.0 mm</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- Floating Settings -->
-                  <div class="keyhole-type-settings hidden" id="floating-settings">
-                    <div class="control-group compact">
-                      <label class="control-label" for="inner-diameter-slider">Inner</label>
-                      <div class="range-container">
-                        <input
-                          type="range"
-                          id="inner-diameter-slider"
-                          min="2"
-                          max="8"
-                          step="0.5"
-                          value="4"
-                        />
-                        <span class="range-value" id="inner-diameter-value">4.0 mm</span>
-                      </div>
-                    </div>
-                    <div class="control-group compact">
-                      <label class="control-label" for="outer-diameter-slider">Outer</label>
-                      <div class="range-container">
-                        <input
-                          type="range"
-                          id="outer-diameter-slider"
-                          min="4"
-                          max="12"
-                          step="0.5"
-                          value="8"
-                        />
-                        <span class="range-value" id="outer-diameter-value">8.0 mm</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- Position Info -->
-                  <div class="keyhole-position-info">
-                    <p class="keyhole-coords" id="keyhole-coords">Click on model to place</p>
+                <div class="keyhole-type-settings" id="holepunch-settings">
+                  <div class="slider-row compact">
+                    <label class="slider-label">Diameter</label>
+                    <input type="range" id="hole-diameter-slider" min="2" max="8" step="0.5" value="4" />
+                    <span class="slider-val" id="hole-diameter-value">4.0</span>
+                    <span class="slider-unit">mm</span>
                   </div>
                 </div>
-              </div>
-
-              <!-- Magnet Compartment Options -->
-              <div class="magnet-section">
-                <div class="magnet-header">
-                  <label class="checkbox-group">
-                    <input
-                      type="checkbox"
-                      id="magnet-toggle"
-                      class="checkbox-input"
-                    />
-                    <span class="checkbox-label">Add Magnet Compartment</span>
-                  </label>
-                </div>
-
-                <div class="magnet-options" id="magnet-options">
-                  <!-- Size Presets -->
-                  <div class="control-group">
-                    <label class="control-label">Size Preset</label>
-                    <div class="toggle-group compact" id="magnet-preset-toggle">
-                      <label class="toggle-option">
-                        <input type="radio" name="magnet-preset" value="small" />
-                        <span>6x2</span>
-                      </label>
-                      <label class="toggle-option active">
-                        <input type="radio" name="magnet-preset" value="medium" checked />
-                        <span>8x3</span>
-                      </label>
-                      <label class="toggle-option">
-                        <input type="radio" name="magnet-preset" value="large" />
-                        <span>10x3</span>
-                      </label>
-                      <label class="toggle-option">
-                        <input type="radio" name="magnet-preset" value="custom" />
-                        <span>Custom</span>
-                      </label>
-                    </div>
+                <div class="keyhole-type-settings hidden" id="floating-settings">
+                  <div class="slider-row compact">
+                    <label class="slider-label">Inner</label>
+                    <input type="range" id="inner-diameter-slider" min="2" max="8" step="0.5" value="4" />
+                    <span class="slider-val" id="inner-diameter-value">4.0</span>
+                    <span class="slider-unit">mm</span>
                   </div>
-
-                  <!-- Custom Size Sliders (hidden by default) -->
-                  <div class="magnet-custom-settings hidden" id="magnet-custom-settings">
-                    <div class="control-group compact full-width">
-                      <label class="control-label" for="magnet-diameter-slider">Diameter</label>
-                      <div class="range-container full-width">
-                        <input
-                          type="range"
-                          id="magnet-diameter-slider"
-                          min="4"
-                          max="15"
-                          step="0.5"
-                          value="8"
-                        />
-                        <div class="range-value-input">
-                          <input type="number" id="magnet-diameter-value" min="1" max="30" step="0.1" value="8.0" />
-                          <span class="range-unit">mm</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div class="control-group compact full-width">
-                      <label class="control-label" for="magnet-height-slider">Thickness</label>
-                      <div class="range-container full-width">
-                        <input
-                          type="range"
-                          id="magnet-height-slider"
-                          min="1"
-                          max="6"
-                          step="0.5"
-                          value="3"
-                        />
-                        <div class="range-value-input">
-                          <input type="number" id="magnet-height-value" min="0.5" max="20" step="0.1" value="3.0" />
-                          <span class="range-unit">mm</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- Depth Controls -->
-                  <div class="control-group compact full-width">
-                    <div class="depth-header">
-                      <label class="control-label">Depth</label>
-                      <label class="toggle-label small">
-                        <input type="checkbox" id="magnet-center-toggle" />
-                        <span>Center in model</span>
-                      </label>
-                    </div>
-                    <div class="depth-slider-container" id="depth-slider-container">
-                      <div class="range-container full-width">
-                        <input
-                          type="range"
-                          id="magnet-depth-slider"
-                          min="0"
-                          max="3"
-                          step="0.1"
-                          value="0.5"
-                        />
-                        <div class="range-value-input">
-                          <input type="number" id="magnet-depth-value" min="0" max="10" step="0.1" value="0.5" />
-                          <span class="range-unit">mm</span>
-                        </div>
-                      </div>
-                      <p class="control-hint">Distance from back to magnet cavity</p>
-                    </div>
-                  </div>
-
-                  <!-- Buffer Zone Info -->
-                  <div class="magnet-buffer-info" id="magnet-buffer-info">
-                    <div class="buffer-zone-display">
-                      <div class="buffer-item">
-                        <span class="buffer-label">Below magnet:</span>
-                        <span class="buffer-value" id="buffer-below">0.5 mm</span>
-                      </div>
-                      <div class="buffer-item">
-                        <span class="buffer-label">Above magnet:</span>
-                        <span class="buffer-value" id="buffer-above">-- mm</span>
-                      </div>
-                      <div class="buffer-item total">
-                        <span class="buffer-label">Total height:</span>
-                        <span class="buffer-value" id="buffer-total">-- mm</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- Magnet Count and Clear -->
-                  <div class="magnet-actions">
-                    <span class="magnet-count" id="magnet-count">0 magnets placed</span>
-                    <button type="button" class="btn-secondary btn-small" id="clear-magnets-btn">Clear All</button>
-                  </div>
-
-                  <!-- Position Info -->
-                  <div class="magnet-position-info">
-                    <p class="magnet-coords" id="magnet-coords">Click on model to add magnets</p>
+                  <div class="slider-row compact">
+                    <label class="slider-label">Outer</label>
+                    <input type="range" id="outer-diameter-slider" min="4" max="12" step="0.5" value="8" />
+                    <span class="slider-val" id="outer-diameter-value">8.0</span>
+                    <span class="slider-unit">mm</span>
                   </div>
                 </div>
+                <p class="hint-text" id="keyhole-coords">Click model to place</p>
               </div>
             </div>
-          </article>
+          </div>
 
-          <!-- Color Palette Panel -->
-          <article class="panel" id="palette-panel">
-            <header class="panel-header" data-collapse="palette-content">
-              <h2>Color Palette</h2>
-              <span class="badge" id="palette-count">0 colors</span>
-              <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="6 9 12 15 18 9"></polyline>
-              </svg>
-            </header>
-
-            <div class="panel-content" id="palette-content">
-              <div class="control-group">
-                <label class="checkbox-group">
-                  <input
-                    type="checkbox"
-                    id="color-reduce-toggle"
-                    class="checkbox-input"
-                  />
-                  <span class="checkbox-label">Reduce color count</span>
-                </label>
-              </div>
-
-              <div class="color-reduce-options" id="color-reduce-options">
-                <div class="control-group">
-                  <label class="control-label" for="color-reduce-slider">
-                    Target Colors
-                  </label>
-                  <div class="range-container">
-                    <input
-                      type="range"
-                      id="color-reduce-slider"
-                      class="range-slider"
-                      min="2"
-                      max="256"
-                      value="8"
-                      step="1"
-                    />
-                    <div class="stepper-input">
-                      <button type="button" class="stepper-btn" id="color-reduce-decrement">−</button>
-                      <input
-                        type="number"
-                        id="color-reduce-value"
-                        class="stepper-value"
-                        min="2"
-                        max="256"
-                        value="8"
-                      />
-                      <button type="button" class="stepper-btn" id="color-reduce-increment">+</button>
-                    </div>
-                  </div>
-                  <p class="control-hint">
-                    Merge similar colors until this count is reached
-                  </p>
+          <!-- Section: Magnet -->
+          <div class="ctrl-section" id="magnet-panel">
+            <button type="button" class="ctrl-header" data-collapse="magnet-content">
+              <span class="ctrl-title">Magnet</span>
+              <span class="ctrl-toggle">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="6 9 12 15 18 9"/>
+                </svg>
+              </span>
+            </button>
+            <div class="ctrl-body collapsed" id="magnet-content">
+              <label class="switch-row">
+                <span>Enable magnet cavity</span>
+                <input type="checkbox" id="magnet-toggle" class="switch" />
+              </label>
+              <div class="magnet-options hidden" id="magnet-options">
+                <div class="seg-control" id="magnet-preset-toggle">
+                  <button type="button" class="seg-btn" data-preset="small">
+                    <input type="radio" name="magnet-preset" value="small" hidden />
+                    6×2
+                  </button>
+                  <button type="button" class="seg-btn active" data-preset="medium">
+                    <input type="radio" name="magnet-preset" value="medium" checked hidden />
+                    8×3
+                  </button>
+                  <button type="button" class="seg-btn" data-preset="large">
+                    <input type="radio" name="magnet-preset" value="large" hidden />
+                    10×3
+                  </button>
+                  <button type="button" class="seg-btn" data-preset="custom">
+                    <input type="radio" name="magnet-preset" value="custom" hidden />
+                    ⚙
+                  </button>
                 </div>
+                <div class="magnet-custom-settings hidden" id="magnet-custom-settings">
+                  <div class="slider-row compact">
+                    <label class="slider-label">⌀</label>
+                    <input type="range" id="magnet-diameter-slider" min="4" max="15" step="0.5" value="8" />
+                    <input type="number" id="magnet-diameter-value" min="1" max="30" step="0.1" value="8.0" class="num-input" />
+                    <span class="slider-unit">mm</span>
+                  </div>
+                  <div class="slider-row compact">
+                    <label class="slider-label">H</label>
+                    <input type="range" id="magnet-height-slider" min="1" max="6" step="0.5" value="3" />
+                    <input type="number" id="magnet-height-value" min="0.5" max="20" step="0.1" value="3.0" class="num-input" />
+                    <span class="slider-unit">mm</span>
+                  </div>
+                </div>
+                <div class="depth-row">
+                  <label class="slider-label">Depth</label>
+                  <label class="mini-toggle">
+                    <input type="checkbox" id="magnet-center-toggle" />
+                    <span>Center</span>
+                  </label>
+                </div>
+                <div class="slider-row compact" id="depth-slider-container">
+                  <input type="range" id="magnet-depth-slider" min="0" max="3" step="0.1" value="0.5" />
+                  <input type="number" id="magnet-depth-value" min="0" max="10" step="0.1" value="0.5" class="num-input" />
+                  <span class="slider-unit">mm</span>
+                </div>
+                <div class="magnet-info">
+                  <div class="info-row">
+                    <span>Below</span>
+                    <span id="buffer-below">0.5 mm</span>
+                  </div>
+                  <div class="info-row">
+                    <span>Above</span>
+                    <span id="buffer-above">-- mm</span>
+                  </div>
+                  <div class="info-row total">
+                    <span>Total</span>
+                    <span id="buffer-total">-- mm</span>
+                  </div>
+                </div>
+                <div class="magnet-actions">
+                  <span class="magnet-count" id="magnet-count">0 placed</span>
+                  <button type="button" class="mini-btn" id="clear-magnets-btn">Clear</button>
+                </div>
+                <p class="hint-text" id="magnet-coords">Click model to add</p>
               </div>
+            </div>
+          </div>
 
+          <!-- Section: Colors -->
+          <div class="ctrl-section" id="palette-panel">
+            <button type="button" class="ctrl-header" data-collapse="palette-content">
+              <span class="ctrl-title">Colors</span>
+              <span class="badge" id="palette-count">0</span>
+              <span class="ctrl-toggle">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="6 9 12 15 18 9"/>
+                </svg>
+              </span>
+            </button>
+            <div class="ctrl-body" id="palette-content">
+              <label class="switch-row">
+                <span>Reduce colors</span>
+                <input type="checkbox" id="color-reduce-toggle" class="switch" />
+              </label>
+              <div class="color-reduce-options hidden" id="color-reduce-options">
+                <div class="stepper-row">
+                  <button type="button" class="stepper-btn" id="color-reduce-decrement">−</button>
+                  <input type="number" id="color-reduce-value" class="stepper-val" min="2" max="256" value="8" />
+                  <button type="button" class="stepper-btn" id="color-reduce-increment">+</button>
+                </div>
+                <input type="range" id="color-reduce-slider" min="2" max="256" value="8" class="full-slider" />
+              </div>
               <div class="color-palette" id="color-palette">
-                <div class="color-palette-empty">
-                  No colors extracted yet. Upload an image to see the palette.
-                </div>
+                <div class="palette-empty">No colors yet</div>
               </div>
             </div>
-          </article>
+          </div>
 
-          <!-- Export Panel - Always Expanded -->
-          <article class="panel" id="export-panel">
-            <header class="panel-header" data-collapse="export-content">
-              <h2>Export</h2>
-              <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="6 9 12 15 18 9"></polyline>
-              </svg>
-            </header>
-
-            <div class="panel-content" id="export-content">
-              <div class="export-section">
-                <div class="control-group">
-                  <label class="control-label">Export Format</label>
-                  <div class="toggle-group" id="format-toggle">
-                    <label class="toggle-option">
-                      <input type="radio" name="export-format" value="stl" />
-                      STL
-                    </label>
-                    <label class="toggle-option active">
-                      <input type="radio" name="export-format" value="3mf" checked />
-                      3MF
-                    </label>
-                  </div>
-                  <p class="control-hint" id="format-hint">
-                    Multi-color with separate objects per color
-                  </p>
-                </div>
-
-                <div class="control-group">
-                  <label class="control-label" for="filename-input">
-                    Filename
-                  </label>
-                  <div class="export-filename">
-                    <input
-                      type="text"
-                      id="filename-input"
-                      value="original_keychain"
-                      placeholder="Enter filename"
-                    />
-                    <span class="extension" id="file-extension">.3mf</span>
-                  </div>
-                </div>
-
-                <div class="status-message" id="export-status"></div>
-
-                <button type="button" class="download-btn" id="download-btn" disabled>
-                  <span class="download-btn-icon">⬇</span>
-                  Download Model
-                </button>
-              </div>
-            </div>
-          </article>
-        </section>
+        </aside>
       </main>
 
-      <!-- Export Tutorial Modal -->
+      <!-- ==========================================
+           EXPORT BAR - Bottom
+           ========================================== -->
+      <footer class="export-bar">
+        <div class="export-format">
+          <button type="button" class="format-btn" data-format="stl">
+            <input type="radio" name="export-format" value="stl" hidden />
+            <span class="format-name">STL</span>
+            <span class="format-desc">Single color</span>
+          </button>
+          <button type="button" class="format-btn active" data-format="3mf">
+            <input type="radio" name="export-format" value="3mf" checked hidden />
+            <span class="format-name">3MF</span>
+            <span class="format-desc">Multi-color</span>
+          </button>
+        </div>
+
+        <div class="export-filename">
+          <input type="text" id="filename-input" value="model" placeholder="filename" />
+          <span class="file-ext" id="file-extension">.3mf</span>
+        </div>
+
+        <button type="button" class="export-btn" id="download-btn" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          <span>Export</span>
+        </button>
+
+        <div class="export-status" id="export-status"></div>
+      </footer>
+
+      <!-- ==========================================
+           MODAL
+           ========================================== -->
       <div class="modal-overlay" id="export-tutorial-modal">
-        <div class="modal-content">
-          <button type="button" class="modal-close" id="modal-close-btn">&times;</button>
-          <h3 class="modal-title">Multi-Color Export Info</h3>
+        <div class="modal">
+          <button type="button" class="modal-close" id="modal-close-btn">×</button>
+          <h3 class="modal-title">Multi-Color Export</h3>
           <div class="modal-body">
-            <p>Your 3MF file contains <strong>separate objects for each color</strong>. In your slicer, assign filaments to each object for multi-color printing.</p>
-            <p class="modal-note">The objects are exported in the same order as the colors below:</p>
+            <p>Your 3MF contains separate objects per color. Assign filaments in your slicer.</p>
             <div class="modal-palette" id="modal-palette"></div>
           </div>
-          <div class="modal-footer">
+          <div class="modal-actions">
             <button type="button" class="modal-btn" id="modal-ok-btn">Got it</button>
           </div>
         </div>
       </div>
+
     </div>
 
     <script type="module" src="/src/main.ts"></script>
