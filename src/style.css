@@ -917,14 +917,6 @@ input[type="color"]::-webkit-color-swatch {
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-2) 0;
-  opacity: 0.4;
-  pointer-events: none;
-  transition: opacity var(--duration-fast);
-}
-
-.color-pick-row.visible {
-  opacity: 1;
-  pointer-events: auto;
 }
 
 .color-preview {
@@ -1906,10 +1898,6 @@ input[type="color"]::-webkit-color-swatch {
   gap: var(--space-2);
 }
 
-.bg-color-inline.disabled {
-  opacity: 0.4;
-  pointer-events: none;
-}
 
 /* Eyedropper button */
 .eyedropper-btn {

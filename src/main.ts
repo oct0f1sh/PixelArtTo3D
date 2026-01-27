@@ -450,11 +450,7 @@ async function refreshUIFromState(): Promise<void> {
 
   // Update background removal UI
   elements.bgRemoveToggle.checked = state.bgRemoveEnabled;
-  if (state.bgRemoveEnabled) {
-    elements.bgRemoveOptions.classList.remove('hidden');
-  } else {
-    elements.bgRemoveOptions.classList.add('hidden');
-  }
+  // Always show color picker options (not hidden based on toggle)
   elements.bgToleranceSlider.value = String(state.bgTolerance);
   elements.bgToleranceValue.textContent = String(state.bgTolerance);
   updateBgColorPreview(state.bgColor);
@@ -2782,16 +2778,8 @@ function setupEventListeners(): void {
     state.bgRemoveEnabled = elements.bgRemoveToggle.checked;
     trackEvent('feature_toggle', { feature: 'background_removal', enabled: state.bgRemoveEnabled });
 
-    // Toggle color picker disabled state
-    if (bgColorInline) {
-      bgColorInline.classList.toggle('disabled', !state.bgRemoveEnabled);
-    }
-
-    if (state.bgRemoveEnabled) {
-      elements.bgRemoveOptions.classList.remove('hidden');
-    } else {
-      elements.bgRemoveOptions.classList.add('hidden');
-      // Deactivate eyedropper when disabling
+    // Deactivate eyedropper when disabling background removal
+    if (!state.bgRemoveEnabled) {
       state.eyedropperActive = false;
       elements.eyedropperBtn.classList.remove('active');
       elements.imagePreview.classList.remove('eyedropper-mode');
