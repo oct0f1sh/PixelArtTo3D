@@ -76,7 +76,7 @@ export function initPreview(container: HTMLElement): PreviewController {
   controls.enableZoom = true;
   controls.enableRotate = true;
   controls.minDistance = 2;
-  controls.maxDistance = 100;
+  controls.maxDistance = 500;
 
   // Lighting setup
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);

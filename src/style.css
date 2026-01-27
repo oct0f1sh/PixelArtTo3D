@@ -18,12 +18,12 @@
   --surface-4: #222228;
   --surface-5: #2a2a32;
 
-  /* Accent - Electric lime/chartreuse */
-  --accent-primary: #c8ff00;
-  --accent-secondary: #a8e000;
-  --accent-dim: #7fb800;
-  --accent-glow: rgba(200, 255, 0, 0.15);
-  --accent-glow-strong: rgba(200, 255, 0, 0.3);
+  /* Accent - Soft Blue */
+  --accent-primary: #60a5fa;
+  --accent-secondary: #3b82f6;
+  --accent-dim: #2563eb;
+  --accent-glow: rgba(96, 165, 250, 0.15);
+  --accent-glow-strong: rgba(96, 165, 250, 0.3);
 
   /* Semantic */
   --danger: #ff4757;
@@ -222,6 +222,7 @@ body {
   align-items: center;
   justify-content: center;
   padding: var(--space-6);
+  padding: var(--space-6);
   cursor: pointer;
   position: relative;
   transition: all var(--duration-normal);
@@ -303,6 +304,9 @@ body {
   padding: var(--space-3);
   background: var(--surface-2);
   border-radius: var(--radius-md);
+  margin-top: auto;
+  width: 100%;
+  border-radius: var(--radius-md);
   margin-top: var(--space-4);
   position: relative;
   z-index: 1;
@@ -354,8 +358,8 @@ body {
 .url-status {
   font-size: 11px;
   text-align: center;
-  margin-top: var(--space-2);
   min-height: 1em;
+  width: 100%;
 }
 
 .url-status.error { color: var(--danger); }

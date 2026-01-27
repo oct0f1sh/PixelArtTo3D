@@ -108,3 +108,7 @@ Test images are located in `test-resources/` directory:
 | Color Reduce Target | 8 |
 | Background Tolerance | 10 |
 | Export Format | 3MF |
+
+## Git Commits
+
+- Do not include Co-Authored-By lines mentioning Claude in commit messages

@@ -185,6 +185,38 @@
             <div class="source-filename">
               <span id="image-filename">--</span>
             </div>
+
+            <!-- Background Removal Options -->
+            <div class="ctrl-section" id="background-panel">
+              <button type="button" class="ctrl-header" data-collapse="bg-content">
+                <span class="ctrl-title">Background</span>
+                <span class="ctrl-toggle">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="6 9 12 15 18 9"/>
+                  </svg>
+                </span>
+              </button>
+              <div class="ctrl-body" id="bg-content">
+                <label class="switch-row">
+                  <span>Remove background</span>
+                  <input type="checkbox" id="bg-remove-toggle" class="switch" />
+                </label>
+                <div class="color-pick-row" id="bg-remove-options">
+                  <div class="color-preview" id="bg-color-preview">
+                    <span class="color-hint">Pick</span>
+                  </div>
+                  <button type="button" class="icon-btn" id="eyedropper-btn" title="Eyedropper">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M2 22l1-1h3l9-9M3 21v-3l9-9M14.5 5.5l4 4M18.5 9.5l-4-4 1.5-1.5a2.83 2.83 0 114 4L18.5 9.5z"/>
+                    </svg>
+                  </button>
+                  <div class="slider-compact">
+                    <input type="range" id="bg-tolerance-slider" min="0" max="50" value="10" />
+                    <span class="slider-val" id="bg-tolerance-value">10</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -208,38 +240,6 @@
 
         <!-- RIGHT: Controls Panel -->
         <aside class="controls-panel">
-
-          <!-- Section: Background -->
-          <div class="ctrl-section" id="background-panel">
-            <button type="button" class="ctrl-header" data-collapse="bg-content">
-              <span class="ctrl-title">Background</span>
-              <span class="ctrl-toggle">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polyline points="6 9 12 15 18 9"/>
-                </svg>
-              </span>
-            </button>
-            <div class="ctrl-body" id="bg-content">
-              <label class="switch-row">
-                <span>Remove background</span>
-                <input type="checkbox" id="bg-remove-toggle" class="switch" />
-              </label>
-              <div class="color-pick-row" id="bg-remove-options">
-                <div class="color-preview" id="bg-color-preview">
-                  <span class="color-hint">Pick</span>
-                </div>
-                <button type="button" class="icon-btn" id="eyedropper-btn" title="Eyedropper">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M2 22l1-1h3l9-9M3 21v-3l9-9M14.5 5.5l4 4M18.5 9.5l-4-4 1.5-1.5a2.83 2.83 0 114 4L18.5 9.5z"/>
-                  </svg>
-                </button>
-                <div class="slider-compact">
-                  <input type="range" id="bg-tolerance-slider" min="0" max="50" value="10" />
-                  <span class="slider-val" id="bg-tolerance-value">10</span>
-                </div>
-              </div>
-            </div>
-          </div>
 
           <!-- Section: Dimensions -->
           <div class="ctrl-section" id="dimensions-panel">
