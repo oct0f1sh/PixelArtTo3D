@@ -88,6 +88,7 @@
 html, body {
   height: 100%;
   overflow: hidden;
+  overscroll-behavior: none;
 }
 
 body {
@@ -97,6 +98,12 @@ body {
   color: var(--text-1);
   background: var(--surface-0);
   -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Prevent zoom on double-tap for interactive elements */
+button, input, select, textarea {
+  touch-action: manipulation;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -1625,6 +1632,10 @@ input[type="color"]::-webkit-color-swatch {
    RESPONSIVE
    ═══════════════════════════════════════════════════════════════════════════ */
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   RESPONSIVE BREAKPOINTS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
 @media (max-width: 1200px) {
   :root {
     --left-sidebar-width: 260px;
@@ -1632,34 +1643,178 @@ input[type="color"]::-webkit-color-swatch {
   }
 }
 
+/* Tablet - Stack to single column */
 @media (max-width: 900px) {
+  :root {
+    --toolbar-height: 52px;
+  }
+
   .workspace {
     grid-template-columns: 1fr;
-    grid-template-rows: 200px 1fr auto;
+    grid-template-rows: auto 1fr auto;
+  }
+
+  /* Hide resize handle on mobile/tablet */
+  .resize-handle {
+    display: none;
   }
 
   .source-panel {
+    width: 100%;
+    min-width: unset;
+    max-width: unset;
     border-right: none;
     border-bottom: 1px solid var(--border-1);
+    max-height: 35vh;
+  }
+
+  .preview-panel {
+    min-height: 250px;
   }
 
   .controls-panel {
     border-left: none;
     border-top: 1px solid var(--border-1);
-    max-height: 300px;
+    max-height: 40vh;
+    overflow-y: auto;
   }
 
+  /* Larger touch targets for controls */
+  .ctrl-header {
+    padding: var(--space-4);
+    min-height: 48px;
+  }
+
+  .switch-row {
+    min-height: 44px;
+  }
+
+  /* Better slider sizing for touch */
+  input[type="range"] {
+    height: 6px;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    width: 20px;
+    height: 20px;
+  }
+
+  input[type="range"]::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+  }
+
+  /* Larger buttons for touch */
+  .tool-btn {
+    width: 40px;
+    height: 40px;
+  }
+
+  .icon-btn {
+    width: 36px;
+    height: 36px;
+  }
+
+  /* Export bar adjustments */
   .export-bar {
     flex-wrap: wrap;
     height: auto;
     padding: var(--space-3) var(--space-4);
     gap: var(--space-3);
   }
+
+  /* Dimension inputs */
+  .dim-input-group input {
+    width: 70px;
+  }
+
+  /* Drop zone adjustments */
+  .drop-zone {
+    padding: var(--space-4);
+  }
+
+  .drop-zone-text {
+    font-size: 13px;
+  }
+
+  /* Color swatches - more compact on tablet */
+  .color-swatch {
+    padding: var(--space-2) var(--space-3);
+  }
 }
 
+/* Mobile - Compact layout */
 @media (max-width: 600px) {
+  :root {
+    --toolbar-height: 48px;
+    --export-bar-height: auto;
+  }
+
+  /* Toolbar adjustments */
+  .toolbar {
+    padding: 0 var(--space-3);
+  }
+
   .toolbar-brand .brand-text {
     display: none;
+  }
+
+  .toolbar-actions {
+    gap: 0;
+  }
+
+  .tool-btn {
+    width: 36px;
+    height: 36px;
+  }
+
+  .toolbar-divider {
+    margin: 0 var(--space-1);
+  }
+
+  /* Source panel tighter */
+  .source-panel {
+    max-height: 30vh;
+  }
+
+  .source-toolbar {
+    padding: var(--space-2) var(--space-3);
+    gap: var(--space-2);
+  }
+
+  /* Preview canvas area */
+  .preview-panel {
+    min-height: 200px;
+  }
+
+  /* Controls panel */
+  .controls-panel {
+    max-height: 45vh;
+  }
+
+  .ctrl-body {
+    padding: var(--space-2) var(--space-3);
+  }
+
+  /* Form controls - stack vertically */
+  .dim-row {
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .dim-input-group {
+    flex: 1;
+    min-width: 100px;
+  }
+
+  .dim-input-group input {
+    width: 100%;
+  }
+
+  /* Export bar - full width stacking */
+  .export-bar {
+    padding: var(--space-3);
+    gap: var(--space-2);
   }
 
   .export-format {
@@ -1668,15 +1823,142 @@ input[type="color"]::-webkit-color-swatch {
 
   .format-btn {
     flex: 1;
+    padding: var(--space-3);
   }
 
   .export-filename {
     flex: 1;
+    min-width: 0;
+  }
+
+  .filename-input {
+    min-width: 0;
+    width: 100%;
   }
 
   .export-btn {
     width: 100%;
     justify-content: center;
+    padding: var(--space-3) var(--space-4);
+  }
+
+  /* Color palette */
+  .color-swatch {
+    gap: var(--space-2);
+  }
+
+  .color-swatch-name {
+    font-size: 10px;
+  }
+
+  .color-swatch-hex {
+    font-size: 10px;
+  }
+
+  /* Slider rows - stack label above */
+  .slider-row {
+    flex-wrap: wrap;
+  }
+
+  .slider-row span:first-child {
+    width: 100%;
+    margin-bottom: var(--space-1);
+  }
+
+  /* Toggle buttons - wrap on mobile */
+  .toggle-row {
+    flex-wrap: wrap;
+  }
+
+  /* Drop zone */
+  .drop-zone {
+    padding: var(--space-3);
+    min-height: 100px;
+  }
+
+  .drop-icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .drop-zone-text {
+    font-size: 12px;
+  }
+
+  .url-loader input {
+    font-size: 12px;
+  }
+}
+
+/* Very small screens */
+@media (max-width: 400px) {
+  .source-panel {
+    max-height: 25vh;
+  }
+
+  .preview-panel {
+    min-height: 180px;
+  }
+
+  .controls-panel {
+    max-height: 50vh;
+  }
+
+  .ctrl-header {
+    padding: var(--space-3);
+  }
+
+  .ctrl-title {
+    font-size: 12px;
+  }
+
+  .badge {
+    font-size: 10px;
+    padding: 1px 6px;
+  }
+
+  /* Even more compact color rows */
+  .color-swatch-name {
+    display: none;
+  }
+}
+
+/* Touch device optimizations */
+@media (hover: none) and (pointer: coarse) {
+  /* Larger touch targets */
+  .tool-btn,
+  .icon-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .switch-row {
+    min-height: 48px;
+  }
+
+  /* Remove hover-only effects */
+  .color-swatch:hover {
+    background: var(--surface-3);
+  }
+
+  .tool-btn:hover {
+    background: transparent;
+  }
+
+  /* Better tap feedback */
+  .tool-btn:active,
+  .icon-btn:active {
+    background: var(--surface-4);
+    transform: scale(0.95);
+  }
+
+  .color-swatch:active {
+    background: var(--surface-4);
+  }
+
+  /* Ensure delete buttons are always visible on touch */
+  .color-delete-btn {
+    opacity: 1;
   }
 }
 
