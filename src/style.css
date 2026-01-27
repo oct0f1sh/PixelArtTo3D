@@ -658,11 +658,14 @@ body {
   border-left: 1px solid var(--border-1);
   overflow-y: auto;
   overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Control Sections */
 .ctrl-section {
   border-bottom: 1px solid var(--border-1);
+  flex-shrink: 0;
 }
 
 .ctrl-header {
@@ -1249,16 +1252,42 @@ input[type="color"]::-webkit-color-swatch {
   margin-top: var(--space-2);
 }
 
-/* Color Palette */
+/* Color Palette - expands to fill remaining sidebar space */
+#palette-panel {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#palette-panel .ctrl-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#palette-panel .ctrl-body.collapsed {
+  display: none;
+}
+
+#palette-panel:has(.ctrl-body.collapsed) {
+  flex: 0 0 auto;
+}
+
 .color-palette {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
   padding: var(--space-2) 0;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .palette-empty {
-  grid-column: 1 / -1;
   text-align: center;
   padding: var(--space-4);
   color: var(--text-4);
@@ -1266,45 +1295,52 @@ input[type="color"]::-webkit-color-swatch {
 }
 
 .color-swatch {
-  position: relative;
-  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2);
+  background: var(--surface-3);
   border-radius: var(--radius-sm);
-  border: 2px solid var(--border-1);
   cursor: default;
   transition: all var(--duration-fast);
 }
 
 .color-swatch:hover {
-  border-color: var(--border-2);
-  transform: scale(1.05);
+  background: var(--surface-4);
 }
 
 .color-delete-btn {
-  position: absolute;
-  top: -4px;
-  right: -4px;
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--surface-4);
+  background: transparent;
   border: none;
   border-radius: 50%;
-  font-size: 10px;
-  color: var(--text-3);
+  font-size: 14px;
+  color: var(--text-4);
   cursor: pointer;
-  opacity: 0;
+  margin-left: auto;
   transition: all var(--duration-fast);
 }
 
-.color-swatch:hover .color-delete-btn {
-  opacity: 1;
+.color-delete-btn:hover:not(:disabled) {
+  background: var(--surface-5);
+  color: var(--text-2);
 }
 
-.color-delete-btn:hover {
-  background: var(--danger);
-  color: var(--text-1);
+.color-delete-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* Spacer for base row to align with rows that have delete buttons */
+.color-swatch-spacer {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -1650,10 +1686,6 @@ input[type="color"]::-webkit-color-swatch {
     width: 100%;
     justify-content: center;
   }
-
-  .color-palette {
-    grid-template-columns: repeat(5, 1fr);
-  }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -1839,27 +1871,24 @@ input[type="color"]::-webkit-color-swatch {
 
 /* Color swatch structure */
 .color-swatch-preview {
-  width: 100%;
-  height: 100%;
-  border-radius: inherit;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-1);
+  flex-shrink: 0;
 }
 
 .color-swatch-hex {
-  position: absolute;
-  bottom: 2px;
-  left: 0;
-  right: 0;
-  text-align: center;
   font-family: var(--font-mono);
-  font-size: 8px;
-  color: var(--text-1);
-  text-shadow: 0 1px 2px rgba(0,0,0,0.8);
-  opacity: 0;
-  transition: opacity var(--duration-fast);
+  font-size: 11px;
+  color: var(--text-2);
 }
 
-.color-swatch:hover .color-swatch-hex {
-  opacity: 1;
+.color-swatch-name {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-3);
+  flex: 1;
 }
 
 /* Color palette empty state */

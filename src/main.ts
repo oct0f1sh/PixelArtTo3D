@@ -1884,30 +1884,32 @@ function updateColorPalette(): void {
   }
 
   // Build palette HTML with base color first (if enabled), then extracted colors
+  // Include spacer on base row to align with delete buttons in other rows
   const baseSwatchHtml = state.baseEnabled ? `
     <div class="color-swatch">
+      <span class="color-swatch-name">base</span>
+      <span class="color-swatch-hex">${state.baseColor}</span>
       <div class="color-swatch-preview" style="background-color: ${state.baseColor}"></div>
-      <div class="color-swatch-hex">${state.baseColor}</div>
-      <div class="color-swatch-name">base</div>
+      <div class="color-swatch-spacer"></div>
     </div>
   ` : '';
 
-  // Only show delete button if there's more than one color
-  const showDelete = palette.length > 1;
+  // Only allow deletion if there's more than one color
+  const canDelete = palette.length > 1;
 
   const colorSwatchesHtml = palette.map((color, index) => `
     <div class="color-swatch" data-color-index="${index}">
-      ${showDelete ? `<button type="button" class="color-delete-btn" data-delete-index="${index}" title="Remove color">×</button>` : ''}
+      <span class="color-swatch-name">color_${index + 1}</span>
+      <span class="color-swatch-hex">${color.hex}</span>
       <div class="color-swatch-preview" style="background-color: ${color.hex}"></div>
-      <div class="color-swatch-hex">${color.hex}</div>
-      <div class="color-swatch-name">color_${index + 1}</div>
+      <button type="button" class="color-delete-btn" data-delete-index="${index}" title="Remove color" ${!canDelete ? 'disabled' : ''}>×</button>
     </div>
   `).join('');
 
   elements.colorPalette.innerHTML = baseSwatchHtml + colorSwatchesHtml;
 
   // Add click handlers for delete buttons
-  if (showDelete) {
+  if (canDelete) {
     elements.colorPalette.querySelectorAll('.color-delete-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
