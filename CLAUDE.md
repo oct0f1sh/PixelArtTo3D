@@ -51,17 +51,31 @@ Meshes must be watertight (zero boundary edges) and manifold (each edge shared b
 
 ## UI Structure
 
-The UI uses collapsible panels with localStorage persistence for panel states:
+The UI uses a three-column workspace layout with collapsible panels:
 
-- **Image Input Panel**: Drag & drop, file selector, or URL import; input/output preview with zoom/pan and crop tool
-- **Background Removal Panel**: Toggle, color picker with eyedropper, tolerance slider, auto-detection on load
-- **Physical Dimensions Panel**: Width/height inputs, unit toggle (mm/inches)
-- **3D Height Settings Panel**: Pixel height slider, base toggle and height slider, base color picker
-- **Keyhole Options Panel**: Enable toggle, type selector (holepunch/floating), diameter controls
-- **Magnet Compartment Panel**: Enable toggle, size presets (small/medium/large/custom), diameter/height/depth controls, center depth toggle
-- **Color Palette Panel**: Color count display, reduce toggle with slider/+/- buttons, individual color swatches with X delete buttons
-- **3D Preview Panel**: Three.js canvas with orbit controls, reset view button, magnet wireframe indicators
-- **Export Panel**: Format toggle (STL/3MF), filename input, download button
+### Layout
+- **Left Panel (Source)**: Image input, preview with zoom/pan, crop tool, background removal options
+- **Center Panel (Preview)**: Full-size Three.js 3D preview canvas
+- **Right Panel (Controls)**: Collapsible settings panels, color palette
+- **Bottom Bar**: Export format toggle, filename input, download button
+
+### Left Panel (Source)
+- **Drop Zone**: Drag & drop, file selector, URL import
+- **Image Preview**: Input/output tabs with zoom/pan (up to 50x), pixel grid overlay
+- **Preview Toolbar**: Grid toggle, crop button, clear image
+- **Background Section**: Toggle, color picker with eyedropper (always accessible), tolerance slider
+
+### Right Panel (Controls)
+- **Physical Dimensions**: Width/height inputs, unit toggle (mm/inches)
+- **3D Height Settings**: Pixel height slider, base toggle and height, base color picker
+- **Keyhole Options**: Enable toggle, type selector (holepunch/floating), diameter controls
+- **Magnet Compartment**: Enable toggle, size presets, diameter/height/depth controls
+- **Color Palette**: Expands to fill remaining space, horizontal rows showing label/hex/preview/delete button
+
+### Features
+- **Resizable Left Sidebar**: Drag handle between source panel and preview (200px-600px range)
+- **Panel State Persistence**: Collapse states saved to localStorage
+- **Mobile Responsive**: Stacks vertically on screens ≤900px with touch-optimized controls
 
 ### Image Input Features
 

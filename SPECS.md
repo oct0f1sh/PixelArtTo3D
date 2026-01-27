@@ -173,70 +173,75 @@ Meshes must be watertight for 3D printing:
 
 ## UI Layout
 
+### Desktop Layout (Three-Column Workspace)
+
 ```
-+--------------------------------------------------+
-|  Pixel Art to 3D Converter                       |
-+--------------------------------------------------+
-|                                                  |
-|  +-- IMAGE INPUT (collapsible) ---------------+ |
-|  | [DROP IMAGE HERE or click to upload]       | |
-|  | +--------+  +--------+                     | |
-|  | | Input  |  | Output |  [Show Grid] toggle | |
-|  | +--------+  +--------+                     | |
-|  +--------------------------------------------+ |
-|                                                  |
-|  +-- BACKGROUND REMOVAL (collapsible) --------+ |
-|  | [x] Remove background  [color] [eyedropper]| |
-|  | Tolerance: [====o====] 10                  | |
-|  +--------------------------------------------+ |
-|                                                  |
-|  +-- 3D PREVIEW (always visible) -------------+ |
-|  | +--------------------------------------+   | |
-|  | |                                      |   | |
-|  | |         Three.js Canvas              |   | |
-|  | |                                      |   | |
-|  | +--------------------------------------+   | |
-|  | [Reset View]                               | |
-|  +--------------------------------------------+ |
-|                                                  |
-|  +-- PHYSICAL DIMENSIONS (collapsible) -------+ |
-|  | Width: [50] mm    Height: [auto] mm        | |
-|  | Units: [mm] / [inches]                     | |
-|  +--------------------------------------------+ |
-|                                                  |
-|  +-- 3D HEIGHT SETTINGS (collapsible) --------+ |
-|  | Pixel Height: [====o====] 1.0 mm           | |
-|  | [x] Include base layer                     | |
-|  | Base Height: [====o====] 2.0 mm            | |
-|  | Base Color: [#000000]                      | |
-|  +--------------------------------------------+ |
-|                                                  |
-|  +-- KEYHOLE OPTIONS (collapsible) -----------+ |
-|  | [x] Add keyhole                            | |
-|  | Position: [Top-center v]                   | |
-|  +--------------------------------------------+ |
-|                                                  |
-|  +-- COLOR PALETTE (collapsible) -------------+ |
-|  | [x] Reduce color count  [-] [====] [+]     | |
-|  | +------+ +------+ +------+ +------+        | |
-|  | |[x]   | |[x]   | |[x]   | |[x]   |        | |
-|  | |color1| |color2| |color3| |color4|        | |
-|  | +------+ +------+ +------+ +------+        | |
-|  +--------------------------------------------+ |
-|                                                  |
-|  +-- EXPORT (always visible) -----------------+ |
-|  | Format: [STL] / [3MF]                      | |
-|  | Filename: [pixel_art_keychain] .3mf        | |
-|  | [        DOWNLOAD        ]                 | |
-|  +--------------------------------------------+ |
-+--------------------------------------------------+
++------------------------------------------------------------------------+
+| [Logo] PIXEL ART TO 3D                          [Undo] [Redo] [?] [⚙]  |
++------------------------------------------------------------------------+
+|              |   |                                    |                 |
+| LEFT PANEL   | R |        CENTER PANEL               | RIGHT PANEL     |
+| (Source)     | E |        (3D Preview)               | (Controls)      |
+|              | S |                                    |                 |
+| +----------+ | I | +--------------------------------+ | +-------------+ |
+| | Drop     | | Z | |                                | | | Dimensions  | |
+| | Zone     | | E | |                                | | +-------------+ |
+| +----------+ |   | |                                | | +-------------+ |
+| +----------+ | H | |      Three.js Canvas           | | | Height      | |
+| | Input/   | | A | |                                | | +-------------+ |
+| | Output   | | N | |                                | | +-------------+ |
+| | Preview  | | D | |                                | | | Keyhole     | |
+| +----------+ | L | |                                | | +-------------+ |
+| +----------+ | E | +--------------------------------+ | +-------------+ |
+| | Grid |   | |   |                                    | | Magnet      | |
+| | Crop |   | |   |                                    | +-------------+ |
+| +----------+ |   |                                    | +-------------+ |
+| +----------+ |   |                                    | | Colors      | |
+| |Background| |   |                                    | | (expands)   | |
+| +----------+ |   |                                    | +-------------+ |
++------------------------------------------------------------------------+
+| Format: [STL][3MF]  Filename: [________]  [    DOWNLOAD    ]           |
++------------------------------------------------------------------------+
 ```
 
-### Responsive Behavior (Desktop-First)
+### Panel Details
 
-- **Desktop (>1024px):** Full layout as shown
-- **Tablet (768-1024px):** Stacked panels, smaller preview
-- **Mobile (<768px):** Single column, scrollable. Preview may be smaller.
+**Left Panel (200px-600px, resizable):**
+- Drop zone with URL import
+- Image preview with Input/Output tabs
+- Zoom/pan controls (mouse wheel, drag)
+- Grid overlay toggle, Crop tool, Clear button
+- Background removal section (always accessible color picker)
+
+**Center Panel:**
+- Full Three.js 3D preview canvas
+- Orbit controls for rotation, zoom, pan
+- Maximum zoom distance: 500 units
+
+**Right Panel:**
+- Collapsible sections: Dimensions, Height, Keyhole, Magnet
+- Color palette: Horizontal rows with label | hex | preview | delete
+- Colors section expands to fill remaining vertical space
+
+### Responsive Behavior
+
+- **Desktop (>1200px):** Full three-column layout with 280px sidebars
+- **Tablet (900-1200px):** Narrower sidebars (260px)
+- **Mobile (≤900px):** Single column, vertically stacked:
+  - Source panel (top, scrollable, max 50vh)
+  - 3D Preview (middle, min 250px)
+  - Controls panel (bottom, scrollable, max 35vh)
+  - Resize handle hidden
+- **Small Mobile (≤600px):** Compact controls, full-width export buttons
+- **Very Small (≤400px):** Ultra-compact mode, color names hidden
+
+### Touch Optimizations
+
+- Minimum 44px touch targets
+- Tap feedback animations
+- No hover-only interactions
+- Double-tap zoom prevention on controls
+- Smooth scrolling in panel areas
 
 ---
 
@@ -350,17 +355,22 @@ jobs:
 
 ## Future Considerations
 
-These features are explicitly out of scope for v1 but the architecture should not preclude them:
+These features are explicitly out of scope but the architecture should not preclude them:
 
 - Custom keyhole positioning (drag to place)
 - Multiple keyhole support
 - Beveled/rounded edges on pixels
-- Magnet hole option (for fridge magnets)
 - Batch processing multiple images
 - Save/load project settings
-- Undo/redo for color changes
 - Color picker to change individual colors
 - Import/export color palettes
+
+### Implemented Since v1
+
+- ✅ Magnet hole option (magnet compartments with presets)
+- ✅ Undo/redo for all changes (Cmd+Z / Ctrl+Z)
+- ✅ Mobile-responsive design
+- ✅ Resizable workspace panels
 
 ---
 
@@ -372,7 +382,14 @@ These features are explicitly out of scope for v1 but the architecture should no
 | Firefox 90+ | Full |
 | Safari 15+ | Full |
 | Edge 90+ | Full |
-| Mobile Safari | Basic (may have WebGL limitations) |
-| Mobile Chrome | Basic |
+| Mobile Safari | Full (touch-optimized UI) |
+| Mobile Chrome | Full (touch-optimized UI) |
 
 WebGL 2.0 required for Three.js. Fallback message shown if unavailable.
+
+### Mobile Experience
+
+- Responsive layout adapts to screen size
+- Touch-friendly controls with 44px minimum targets
+- Scrollable panels for accessing all settings
+- Optimized 3D preview with touch gestures

@@ -7,6 +7,7 @@ Convert pixel art images into 3D printable models (STL/3MF). Perfect for creatin
 ## Features
 
 - **100% In-Browser** — Your images never leave your device. No uploads, no server processing.
+- **Mobile Friendly** — Responsive design with touch-optimized controls for phones and tablets
 - **STL Export** — Single mesh, binary format for universal slicer compatibility
 - **3MF Export** — Multi-color support with separate objects per color
 - **URL Import** — Load images directly from URLs (with CORS support)
@@ -16,9 +17,10 @@ Convert pixel art images into 3D printable models (STL/3MF). Perfect for creatin
 - **Keyhole Option** — Add a hanging hole for keychains (holepunch or floating ring style)
 - **Magnet Compartments** — Add cylindrical cavities for embedding magnets
 - **Auto Scale Detection** — Automatically detects upscaled pixel art and downsamples to native resolution
-- **Real-time 3D Preview** — Orbit, zoom (up to 50x), and pan to inspect your model before export
+- **Real-time 3D Preview** — Orbit, zoom (up to 500x), and pan to inspect your model before export
 - **Customizable Dimensions** — Set physical size in mm or inches
 - **Undo/Redo** — Full history support (Cmd+Z / Ctrl+Z to undo, Shift+Cmd+Z / Ctrl+Y to redo)
+- **Resizable Workspace** — Drag to resize the left panel for optimal viewing
 
 ## How It Works
 
