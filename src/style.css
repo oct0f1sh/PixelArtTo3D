@@ -71,7 +71,8 @@
   /* Layout */
   --toolbar-height: 48px;
   --export-bar-height: 64px;
-  --sidebar-width: 280px;
+  --left-sidebar-width: 280px;
+  --right-sidebar-width: 280px;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -197,9 +198,47 @@ body {
 .workspace {
   flex: 1;
   display: grid;
-  grid-template-columns: var(--sidebar-width) 1fr var(--sidebar-width);
+  grid-template-columns: var(--left-sidebar-width) auto 1fr var(--right-sidebar-width);
   min-height: 0;
   overflow: hidden;
+}
+
+/* Resize Handle */
+.resize-handle {
+  width: 6px;
+  background: var(--surface-1);
+  cursor: col-resize;
+  position: relative;
+  transition: background var(--duration-fast);
+}
+
+.resize-handle::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 2px;
+  height: 40px;
+  background: var(--border-2);
+  border-radius: 1px;
+  transition: background var(--duration-fast);
+}
+
+.resize-handle:hover {
+  background: var(--surface-3);
+}
+
+.resize-handle:hover::after {
+  background: var(--accent-primary);
+}
+
+.resize-handle.dragging {
+  background: var(--surface-3);
+}
+
+.resize-handle.dragging::after {
+  background: var(--accent-primary);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -207,6 +246,9 @@ body {
    ═══════════════════════════════════════════════════════════════════════════ */
 
 .source-panel {
+  width: var(--left-sidebar-width);
+  min-width: 200px;
+  max-width: 600px;
   background: var(--surface-1);
   border-right: 1px solid var(--border-1);
   display: flex;
@@ -1557,7 +1599,8 @@ input[type="color"]::-webkit-color-swatch {
 
 @media (max-width: 1200px) {
   :root {
-    --sidebar-width: 260px;
+    --left-sidebar-width: 260px;
+    --right-sidebar-width: 260px;
   }
 }
 

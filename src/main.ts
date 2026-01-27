@@ -2448,6 +2448,47 @@ function setupEventListeners(): void {
   undoBtn?.addEventListener('click', () => undo());
   redoBtn?.addEventListener('click', () => redo());
 
+  // Left sidebar resize handle
+  const leftResizeHandle = document.getElementById('left-resize-handle');
+  const sourcePanel = document.querySelector('.source-panel') as HTMLElement;
+
+  if (leftResizeHandle && sourcePanel) {
+    let isResizing = false;
+    let startX = 0;
+    let startWidth = 0;
+
+    leftResizeHandle.addEventListener('mousedown', (e) => {
+      isResizing = true;
+      startX = e.clientX;
+      startWidth = sourcePanel.offsetWidth;
+      leftResizeHandle.classList.add('dragging');
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!isResizing) return;
+
+      const delta = e.clientX - startX;
+      const newWidth = Math.max(200, Math.min(600, startWidth + delta));
+      sourcePanel.style.width = `${newWidth}px`;
+      document.documentElement.style.setProperty('--left-sidebar-width', `${newWidth}px`);
+
+      // Trigger resize event for any listeners (like the preview canvas)
+      window.dispatchEvent(new Event('resize'));
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (isResizing) {
+        isResizing = false;
+        leftResizeHandle.classList.remove('dragging');
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      }
+    });
+  }
+
   // Drop zone events
   elements.dropZone.addEventListener('click', () => elements.fileInput.click());
 
